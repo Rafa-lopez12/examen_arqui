@@ -12,7 +12,7 @@ class ProductoDao {
         val connection = DatabaseConnection.obtenerConexion()
 
         try {
-            val query = "SELECT * FROM productos ORDER BY id"
+            val query = "SELECT * FROM producto ORDER BY id"
             val statement = connection?.prepareStatement(query)
             val resultSet = statement?.executeQuery()
 
@@ -23,6 +23,38 @@ class ProductoDao {
             resultSet?.close()
             statement?.close()
         } catch (e: Exception) {
+            println("Error al obtener productos: ${e.message}")
+            e.printStackTrace()
+        } finally {
+            DatabaseConnection.cerrarConexion(connection)
+        }
+
+        productos
+    }
+
+    suspend fun obtenerTodosLosProductosConCategoria(): List<Producto> = withContext(Dispatchers.IO) {
+        val productos = mutableListOf<Producto>()
+        val connection = DatabaseConnection.obtenerConexion()
+
+        try {
+            val query = """
+                SELECT p.*, c.nombre as categoria_nombre
+                FROM producto p
+                LEFT JOIN categoria c ON p.categoria_id = c.id
+                ORDER BY p.id
+            """.trimIndent()
+
+            val statement = connection?.prepareStatement(query)
+            val resultSet = statement?.executeQuery()
+
+            while (resultSet?.next() == true) {
+                productos.add(mapearProductoConCategoria(resultSet))
+            }
+
+            resultSet?.close()
+            statement?.close()
+        } catch (e: Exception) {
+            println("Error al obtener productos con categoría: ${e.message}")
             e.printStackTrace()
         } finally {
             DatabaseConnection.cerrarConexion(connection)
@@ -36,18 +68,25 @@ class ProductoDao {
         val connection = DatabaseConnection.obtenerConexion()
 
         try {
-            val query = "SELECT * FROM productos WHERE id = ?"
+            val query = """
+                SELECT p.*, c.nombre as categoria_nombre
+                FROM producto p
+                LEFT JOIN categoria c ON p.categoria_id = c.id
+                WHERE p.id = ?
+            """.trimIndent()
+
             val statement = connection?.prepareStatement(query)
-            statement?.setInt(1, id)
+            // Código ya actualizado completamente arribad)
             val resultSet = statement?.executeQuery()
 
             if (resultSet?.next() == true) {
-                producto = mapearProducto(resultSet)
+                producto = mapearProductoConCategoria(resultSet)
             }
 
             resultSet?.close()
             statement?.close()
         } catch (e: Exception) {
+            println("Error al obtener producto por ID: ${e.message}")
             e.printStackTrace()
         } finally {
             DatabaseConnection.cerrarConexion(connection)
@@ -56,23 +95,64 @@ class ProductoDao {
         producto
     }
 
-    suspend fun obtenerProductosPorCategoria(categoria: String): List<Producto> = withContext(Dispatchers.IO) {
+    suspend fun obtenerProductosPorCategoria(categoriaId: Int): List<Producto> = withContext(Dispatchers.IO) {
         val productos = mutableListOf<Producto>()
         val connection = DatabaseConnection.obtenerConexion()
 
         try {
-            val query = "SELECT * FROM productos WHERE categoria = ? ORDER BY id"
+            val query = """
+                SELECT p.*, c.nombre as categoria_nombre
+                FROM producto p
+                LEFT JOIN categoria c ON p.categoria_id = c.id
+                WHERE p.categoria_id = ?
+                ORDER BY p.id
+            """.trimIndent()
+
             val statement = connection?.prepareStatement(query)
-            statement?.setString(1, categoria)
+            statement?.setInt(1, categoriaId)
             val resultSet = statement?.executeQuery()
 
             while (resultSet?.next() == true) {
-                productos.add(mapearProducto(resultSet))
+                productos.add(mapearProductoConCategoria(resultSet))
             }
 
             resultSet?.close()
             statement?.close()
         } catch (e: Exception) {
+            println("Error al obtener productos por categoría: ${e.message}")
+            e.printStackTrace()
+        } finally {
+            DatabaseConnection.cerrarConexion(connection)
+        }
+
+        productos
+    }
+
+    suspend fun obtenerProductosPorSubcategoria(subcategoria: String): List<Producto> = withContext(Dispatchers.IO) {
+        val productos = mutableListOf<Producto>()
+        val connection = DatabaseConnection.obtenerConexion()
+
+        try {
+            val query = """
+                SELECT p.*, c.nombre as categoria_nombre
+                FROM producto p
+                LEFT JOIN categoria c ON p.categoria_id = c.id
+                WHERE p.subcategoria = ?
+                ORDER BY p.id
+            """.trimIndent()
+
+            val statement = connection?.prepareStatement(query)
+            statement?.setString(1, subcategoria)
+            val resultSet = statement?.executeQuery()
+
+            while (resultSet?.next() == true) {
+                productos.add(mapearProductoConCategoria(resultSet))
+            }
+
+            resultSet?.close()
+            statement?.close()
+        } catch (e: Exception) {
+            println("Error al obtener productos por subcategoría: ${e.message}")
             e.printStackTrace()
         } finally {
             DatabaseConnection.cerrarConexion(connection)
@@ -87,23 +167,25 @@ class ProductoDao {
 
         try {
             val query = """
-                INSERT INTO productos (nombre, descripcion, precio, categoria, stock, imagen) 
-                VALUES (?, ?, ?, ?, ?, ?)
+                INSERT INTO producto (nombre, descripcion, precio, categoria_id, subcategoria, stock, imagen) 
+                VALUES (?, ?, ?, ?, ?, ?, ?)
             """.trimIndent()
 
             val statement = connection?.prepareStatement(query)
             statement?.setString(1, producto.nombre)
             statement?.setString(2, producto.descripcion)
             statement?.setDouble(3, producto.precio)
-            statement?.setString(4, producto.categoria)
-            statement?.setInt(5, producto.stock)
-            statement?.setString(6, producto.imagen)
+            statement?.setInt(4, producto.categoriaId)
+            statement?.setString(5, producto.subcategoria)
+            statement?.setInt(6, producto.stock)
+            statement?.setString(7, producto.imagen)
 
             val filasAfectadas = statement?.executeUpdate() ?: 0
             exito = filasAfectadas > 0
 
             statement?.close()
         } catch (e: Exception) {
+            println("Error al insertar producto: ${e.message}")
             e.printStackTrace()
         } finally {
             DatabaseConnection.cerrarConexion(connection)
@@ -118,8 +200,8 @@ class ProductoDao {
 
         try {
             val query = """
-                UPDATE productos 
-                SET nombre = ?, descripcion = ?, precio = ?, categoria = ?, stock = ?, imagen = ? 
+                UPDATE producto 
+                SET nombre = ?, descripcion = ?, precio = ?, categoria_id = ?, subcategoria = ?, stock = ?, imagen = ? 
                 WHERE id = ?
             """.trimIndent()
 
@@ -127,16 +209,18 @@ class ProductoDao {
             statement?.setString(1, producto.nombre)
             statement?.setString(2, producto.descripcion)
             statement?.setDouble(3, producto.precio)
-            statement?.setString(4, producto.categoria)
-            statement?.setInt(5, producto.stock)
-            statement?.setString(6, producto.imagen)
-            statement?.setInt(7, producto.id)
+            statement?.setInt(4, producto.categoriaId)
+            statement?.setString(5, producto.subcategoria)
+            statement?.setInt(6, producto.stock)
+            statement?.setString(7, producto.imagen)
+            statement?.setInt(8, producto.id)
 
             val filasAfectadas = statement?.executeUpdate() ?: 0
             exito = filasAfectadas > 0
 
             statement?.close()
         } catch (e: Exception) {
+            println("Error al actualizar producto: ${e.message}")
             e.printStackTrace()
         } finally {
             DatabaseConnection.cerrarConexion(connection)
@@ -150,7 +234,7 @@ class ProductoDao {
         var exito = false
 
         try {
-            val query = "DELETE FROM productos WHERE id = ?"
+            val query = "DELETE FROM producto WHERE id = ?"
             val statement = connection?.prepareStatement(query)
             statement?.setInt(1, id)
 
@@ -159,6 +243,7 @@ class ProductoDao {
 
             statement?.close()
         } catch (e: Exception) {
+            println("Error al eliminar producto: ${e.message}")
             e.printStackTrace()
         } finally {
             DatabaseConnection.cerrarConexion(connection)
@@ -173,9 +258,24 @@ class ProductoDao {
             nombre = resultSet.getString("nombre") ?: "",
             descripcion = resultSet.getString("descripcion") ?: "",
             precio = resultSet.getDouble("precio"),
-            categoria = resultSet.getString("categoria") ?: "",
+            categoriaId = resultSet.getInt("categoria_id"),
+            subcategoria = resultSet.getString("subcategoria") ?: "",
             stock = resultSet.getInt("stock"),
             imagen = resultSet.getString("imagen") ?: ""
+        )
+    }
+
+    private fun mapearProductoConCategoria(resultSet: ResultSet): Producto {
+        return Producto(
+            id = resultSet.getInt("id"),
+            nombre = resultSet.getString("nombre") ?: "",
+            descripcion = resultSet.getString("descripcion") ?: "",
+            precio = resultSet.getDouble("precio"),
+            categoriaId = resultSet.getInt("categoria_id"),
+            subcategoria = resultSet.getString("subcategoria") ?: "",
+            stock = resultSet.getInt("stock"),
+            imagen = resultSet.getString("imagen") ?: "",
+            nombreCategoria = resultSet.getString("categoria_nombre") ?: ""
         )
     }
 }

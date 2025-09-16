@@ -78,7 +78,7 @@ class DatabaseConnection {
             val connection = obtenerConexion()
             return try {
                 val sql = """
-                    CREATE TABLE IF NOT EXISTS productos (
+                    CREATE TABLE IF NOT EXISTS producto (
                         id SERIAL PRIMARY KEY,
                         nombre VARCHAR(255) NOT NULL,
                         descripcion TEXT,
@@ -98,6 +98,131 @@ class DatabaseConnection {
 
             } catch (e: Exception) {
                 println("Error al crear tabla: ${e.message}")
+                e.printStackTrace()
+                false
+            } finally {
+                cerrarConexion(connection)
+            }
+        }
+
+        suspend fun crearTablaCategorias(): Boolean {
+            val connection = obtenerConexion()
+            return try {
+                val sql = """
+            CREATE TABLE IF NOT EXISTS categoria (
+                id SERIAL PRIMARY KEY,
+                nombre VARCHAR(100) NOT NULL,
+                subcategoria VARCHAR(100) NOT NULL,
+                descripcion TEXT,
+                activo BOOLEAN DEFAULT true,
+                UNIQUE(nombre, subcategoria)
+            )
+        """.trimIndent()
+
+                val statement = connection?.createStatement()
+                statement?.executeUpdate(sql)
+                statement?.close()
+
+                println("🏷️ Tabla 'categorias' verificada/creada exitosamente")
+                true
+
+            } catch (e: Exception) {
+                println("Error al crear tabla categorias: ${e.message}")
+                e.printStackTrace()
+                false
+            } finally {
+                cerrarConexion(connection)
+            }
+        }
+
+        suspend fun crearTablaProductosActualizada(): Boolean {
+            val connection = obtenerConexion()
+            return try {
+                val sql = """
+            CREATE TABLE IF NOT EXISTS producto (
+                id SERIAL PRIMARY KEY,
+                nombre VARCHAR(255) NOT NULL,
+                descripcion TEXT,
+                precio DECIMAL(10,2) NOT NULL,
+                categoria_id INTEGER REFERENCES categoria(id),
+                subcategoria VARCHAR(100),
+                stock INTEGER DEFAULT 0,
+                imagen VARCHAR(500)
+            )
+        """.trimIndent()
+
+                val statement = connection?.createStatement()
+                statement?.executeUpdate(sql)
+                statement?.close()
+
+                println("📦 Tabla 'productos' actualizada exitosamente")
+                true
+
+            } catch (e: Exception) {
+                println("Error al crear tabla productos: ${e.message}")
+                e.printStackTrace()
+                false
+            } finally {
+                cerrarConexion(connection)
+            }
+        }
+
+
+
+
+
+        suspend fun inicializarTodasLasTablas(): Boolean {
+            return try {
+                val resultadoCategorias = crearTablaCategorias()
+                val resultadoProductos = crearTablaProductosActualizada()
+               
+
+                if (resultadoCategorias) {
+                    insertarCategoriasIniciales()
+                }
+
+                resultadoCategorias && resultadoProductos
+            } catch (e: Exception) {
+                println("Error al inicializar tablas: ${e.message}")
+                false
+            }
+        }
+
+        suspend fun insertarCategoriasIniciales(): Boolean {
+            val connection = obtenerConexion()
+            return try {
+                val categorias = listOf(
+                    "Split" to listOf("Residencial", "Comercial", "Industrial"),
+                    "Ventana" to listOf("Compacto", "Estándar"),
+                    "Central" to listOf("Ducto", "Cassette", "Piso-Techo"),
+                    "Portátil" to listOf("Doméstico", "Oficina")
+                )
+
+                val sql = """
+            INSERT INTO categorias (nombre, subcategoria, descripcion) 
+            VALUES (?, ?, ?) 
+            ON CONFLICT (nombre, subcategoria) DO NOTHING
+        """.trimIndent()
+
+                val statement = connection?.prepareStatement(sql)
+
+                categorias.forEach { (categoria, subcategorias) ->
+                    subcategorias.forEach { subcategoria ->
+                        statement?.setString(1, categoria)
+                        statement?.setString(2, subcategoria)
+                        statement?.setString(3, "Aires acondicionados $categoria $subcategoria")
+                        statement?.addBatch()
+                    }
+                }
+
+                statement?.executeBatch()
+                statement?.close()
+
+                println("🎯 Categorías iniciales insertadas exitosamente")
+                true
+
+            } catch (e: Exception) {
+                println("Error al insertar categorías iniciales: ${e.message}")
                 e.printStackTrace()
                 false
             } finally {

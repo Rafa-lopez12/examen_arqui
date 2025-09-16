@@ -14,34 +14,57 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.tienda_emprendedor.model.Producto
+import com.example.tienda_emprendedor.model.Categoria
 
 class ProductoView {
 
     var nombre by mutableStateOf("")
     var descripcion by mutableStateOf("")
     var precio by mutableStateOf("")
-    var categoria by mutableStateOf("")
+    var categoriaSeleccionada by mutableStateOf<Categoria?>(null)
+    var subcategoriaSeleccionada by mutableStateOf("")
     var stock by mutableStateOf("")
     var productos by mutableStateOf(listOf<Producto>())
+    var categorias by mutableStateOf(listOf<Categoria>())
+    var subcategoriasDisponibles by mutableStateOf(listOf<String>())
 
+    // Estados del UI
+    var mostrarDropdownCategoria by mutableStateOf(false)
+    var mostrarDropdownSubcategoria by mutableStateOf(false)
+    var mostrarDetalleProducto by mutableStateOf(false)
+    var productoSeleccionado by mutableStateOf<Producto?>(null)
+
+    // Callbacks
     var onNombreChanged: (String) -> Unit = {}
     var onDescripcionChanged: (String) -> Unit = {}
     var onPrecioChanged: (String) -> Unit = {}
-    var onCategoriaChanged: (String) -> Unit = {}
+    var onCategoriaChanged: (Categoria) -> Unit = {}
+    var onSubcategoriaChanged: (String) -> Unit = {}
     var onStockChanged: (String) -> Unit = {}
     var onAgregarClick: () -> Unit = {}
     var onEliminarClick: (Producto) -> Unit = {}
+    var onProductoClick: (Producto) -> Unit = {}
 
     fun actualizarProductos(nuevosProductos: List<Producto>) {
         productos = nuevosProductos
+    }
+
+    fun actualizarCategorias(nuevasCategorias: List<Categoria>) {
+        categorias = nuevasCategorias
+    }
+
+    fun actualizarSubcategorias(nuevasSubcategorias: List<String>) {
+        subcategoriasDisponibles = nuevasSubcategorias
     }
 
     fun limpiarFormulario() {
         nombre = ""
         descripcion = ""
         precio = ""
-        categoria = ""
+        categoriaSeleccionada = null
+        subcategoriaSeleccionada = ""
         stock = ""
+        subcategoriasDisponibles = emptyList()
     }
 
     @OptIn(ExperimentalMaterial3Api::class)
@@ -53,7 +76,7 @@ class ProductoView {
                 .padding(16.dp)
         ) {
             Text(
-                text = "🏪 Tienda Emprendedor",
+                text = "🌬️ Gestión de Aires Acondicionados",
                 fontSize = 24.sp,
                 fontWeight = FontWeight.Bold,
                 color = MaterialTheme.colorScheme.primary,
@@ -77,6 +100,17 @@ class ProductoView {
                 }
             }
         }
+
+        // Dialog para mostrar detalle del producto
+        if (mostrarDetalleProducto) {
+            ProductoDetailDialog(
+                producto = productoSeleccionado,
+                onDismiss = {
+                    mostrarDetalleProducto = false
+                    productoSeleccionado = null
+                }
+            )
+        }
     }
 
     @OptIn(ExperimentalMaterial3Api::class)
@@ -90,24 +124,26 @@ class ProductoView {
                 modifier = Modifier.padding(16.dp)
             ) {
                 Text(
-                    text = "Agregar Producto",
+                    text = "Agregar Aire Acondicionado",
                     fontSize = 18.sp,
                     fontWeight = FontWeight.SemiBold,
                     modifier = Modifier.padding(bottom = 8.dp)
                 )
 
+                // Campo Nombre
                 OutlinedTextField(
                     value = nombre,
                     onValueChange = {
                         nombre = it
                         onNombreChanged(it)
                     },
-                    label = { Text("Nombre") },
+                    label = { Text("Nombre/Modelo") },
                     modifier = Modifier.fillMaxWidth()
                 )
 
                 Spacer(modifier = Modifier.height(8.dp))
 
+                // Campo Descripción
                 OutlinedTextField(
                     value = descripcion,
                     onValueChange = {
@@ -120,6 +156,7 @@ class ProductoView {
 
                 Spacer(modifier = Modifier.height(8.dp))
 
+                // Row con Precio y Stock
                 Row(modifier = Modifier.fillMaxWidth()) {
                     OutlinedTextField(
                         value = precio,
@@ -148,23 +185,48 @@ class ProductoView {
 
                 Spacer(modifier = Modifier.height(8.dp))
 
-                OutlinedTextField(
-                    value = categoria,
-                    onValueChange = {
-                        categoria = it
-                        onCategoriaChanged(it)
-                    },
-                    label = { Text("Categoría") },
-                    modifier = Modifier.fillMaxWidth()
-                )
+                // Dropdown Categoría
+                ExposedDropdownMenuBox(
+                    expanded = mostrarDropdownCategoria,
+                    onExpandedChange = { mostrarDropdownCategoria = !mostrarDropdownCategoria }
+                ) {
+                    OutlinedTextField(
+                        value = categoriaSeleccionada?.let { "${it.nombre} - ${it.subcategoria}" } ?: "",
+                        onValueChange = { },
+                        readOnly = true,
+                        label = { Text("Categoría") },
+                        trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = mostrarDropdownCategoria) },
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .menuAnchor()
+                    )
+
+                    ExposedDropdownMenu(
+                        expanded = mostrarDropdownCategoria,
+                        onDismissRequest = { mostrarDropdownCategoria = false }
+                    ) {
+                        categorias.forEach { categoria ->
+                            DropdownMenuItem(
+                                text = { Text("${categoria.nombre} - ${categoria.subcategoria}") },
+                                onClick = {
+                                    categoriaSeleccionada = categoria
+                                    subcategoriaSeleccionada = categoria.subcategoria
+                                    onCategoriaChanged(categoria)
+                                    mostrarDropdownCategoria = false
+                                }
+                            )
+                        }
+                    }
+                }
 
                 Spacer(modifier = Modifier.height(16.dp))
 
                 Button(
                     onClick = onAgregarClick,
-                    modifier = Modifier.align(Alignment.CenterHorizontally)
+                    modifier = Modifier.align(Alignment.CenterHorizontally),
+                    enabled = nombre.isNotEmpty() && precio.isNotEmpty() && categoriaSeleccionada != null
                 ) {
-                    Text("➕ Agregar Producto")
+                    Text("🌬️ Agregar Aire Acondicionado")
                 }
             }
         }
@@ -185,44 +247,45 @@ class ProductoView {
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.SpaceBetween
                 ) {
-                    Text(
-                        text = producto.nombre,
-                        fontSize = 18.sp,
-                        fontWeight = FontWeight.Bold
-                    )
-                    Text(
-                        text = "$${producto.precio}",
-                        fontSize = 16.sp,
-                        fontWeight = FontWeight.SemiBold,
-                        color = MaterialTheme.colorScheme.primary
-                    )
-                }
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(
+                            text = producto.nombre,
+                            fontSize = 18.sp,
+                            fontWeight = FontWeight.Bold
+                        )
+                        Text(
+                            text = producto.descripcion,
+                            fontSize = 14.sp,
+                            color = Color.Gray
+                        )
+                        Spacer(modifier = Modifier.height(4.dp))
+                        Row {
+                            Text(
+                                text = "$${producto.precio}",
+                                fontSize = 16.sp,
+                                fontWeight = FontWeight.SemiBold,
+                                color = MaterialTheme.colorScheme.primary
+                            )
+                            Spacer(modifier = Modifier.width(16.dp))
+                            Text(
+                                text = "📦 ${producto.stock}",
+                                fontSize = 12.sp
+                            )
+                        }
+                        Text(
+                            text = "🏷️ ${producto.nombreCategoria} - ${producto.subcategoria}",
+                            fontSize = 12.sp,
+                            color = Color.Gray
+                        )
+                    }
 
-                Spacer(modifier = Modifier.height(4.dp))
-
-                Text(
-                    text = producto.descripcion,
-                    fontSize = 14.sp,
-                    color = Color.Gray
-                )
-
-                Spacer(modifier = Modifier.height(8.dp))
-
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween
-                ) {
-                    Text(
-                        text = "📦 Stock: ${producto.stock}",
-                        fontSize = 12.sp
-                    )
-                    Text(
-                        text = "🏷️ ${producto.categoria}",
-                        fontSize = 12.sp
-                    )
-
-                    TextButton(onClick = { onEliminarClick(producto) }) {
-                        Text("🗑️ Eliminar", color = Color.Red)
+                    Column {
+                        TextButton(onClick = { onProductoClick(producto) }) {
+                            Text("👁️ Ver")
+                        }
+                        TextButton(onClick = { onEliminarClick(producto) }) {
+                            Text("🗑️ Eliminar", color = Color.Red)
+                        }
                     }
                 }
             }
