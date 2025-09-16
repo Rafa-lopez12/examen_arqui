@@ -11,18 +11,25 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.tooling.preview.Preview
 import com.example.tienda_emprendedor.ui.theme.Tienda_emprendedorTheme
+import com.example.tienda_emprendedor.controller.ProductoController
 
 class MainActivity : ComponentActivity() {
+
+    private lateinit var controller: ProductoController
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+
+        controller = ProductoController()
+
         setContent {
             Tienda_emprendedorTheme {
-                // A surface container using the 'background' color from the theme
                 Surface(
                     modifier = Modifier.fillMaxSize(),
                     color = MaterialTheme.colorScheme.background
                 ) {
-                    Greeting("Android")
+
+                    controller.obtenerVista().Render()
                 }
             }
         }
