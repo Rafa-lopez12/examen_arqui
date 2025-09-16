@@ -9,11 +9,11 @@ import com.example.tienda_emprendedor.view.ProductoView
 
 class ProductoController {
 
-    // El controlador tiene instancias del modelo y la vista
-    private val modelo: ProductoDao = ProductoDao()  // MODELO maneja la BD
-    private val vista: ProductoView = ProductoView()  // VISTA maneja UI
 
-    // Scope para operaciones asíncronas
+    private val modelo: ProductoDao = ProductoDao()
+    private val vista: ProductoView = ProductoView()
+
+
     private val scope = CoroutineScope(Dispatchers.Main)
 
     init {
@@ -22,7 +22,6 @@ class ProductoController {
     }
 
     private fun configurarEventosVista() {
-        // El controlador escucha eventos de la vista
         vista.onAgregarClick = {
             agregarProducto()
         }
@@ -33,7 +32,6 @@ class ProductoController {
     }
 
     private fun agregarProducto() {
-        // El controlador coordina entre vista y modelo
         if (vista.nombre.isNotEmpty() && vista.precio.isNotEmpty()) {
             val producto = Producto(
                 nombre = vista.nombre,
@@ -43,7 +41,6 @@ class ProductoController {
                 stock = vista.stock.toIntOrNull() ?: 0
             )
 
-            // El controlador pide al MODELO que guarde (no lo hace directamente)
             scope.launch {
                 val exito = modelo.insertarProducto(producto)
                 if (exito) {
@@ -55,7 +52,6 @@ class ProductoController {
     }
 
     private fun eliminarProducto(producto: Producto) {
-        // El controlador pide al MODELO que elimine
         scope.launch {
             val exito = modelo.eliminarProducto(producto.id)
             if (exito) {
@@ -65,14 +61,12 @@ class ProductoController {
     }
 
     private fun cargarProductosDesdeModelo() {
-        // El controlador pide datos al MODELO y actualiza la VISTA
         scope.launch {
             val productos = modelo.obtenerTodosLosProductos()
             vista.actualizarProductos(productos)
         }
     }
 
-    // Métodos para el MainActivity
     fun obtenerVista(): ProductoView {
         return vista
     }

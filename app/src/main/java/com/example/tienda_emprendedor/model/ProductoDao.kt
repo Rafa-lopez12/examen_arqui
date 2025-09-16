@@ -7,8 +7,6 @@ import java.sql.ResultSet
 
 class ProductoDao {
 
-    // El MODELO es responsable de acceder a la base de datos
-
     suspend fun obtenerTodosLosProductos(): List<Producto> = withContext(Dispatchers.IO) {
         val productos = mutableListOf<Producto>()
         val connection = DatabaseConnection.obtenerConexion()

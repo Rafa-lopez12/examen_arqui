@@ -15,11 +15,13 @@ import com.example.tienda_emprendedor.controller.ProductoController
 
 class MainActivity : ComponentActivity() {
 
+    // Solo necesitamos el controlador
     private lateinit var controller: ProductoController
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
+        // El controlador maneja tanto el modelo como la vista
         controller = ProductoController()
 
         setContent {
@@ -28,7 +30,7 @@ class MainActivity : ComponentActivity() {
                     modifier = Modifier.fillMaxSize(),
                     color = MaterialTheme.colorScheme.background
                 ) {
-
+                    // Obtenemos la vista del controlador y la renderizamos
                     controller.obtenerVista().Render()
                 }
             }

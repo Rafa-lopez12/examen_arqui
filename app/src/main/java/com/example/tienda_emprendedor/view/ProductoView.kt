@@ -17,7 +17,6 @@ import com.example.tienda_emprendedor.model.Producto
 
 class ProductoView {
 
-    // Estado interno de la vista
     var nombre by mutableStateOf("")
     var descripcion by mutableStateOf("")
     var precio by mutableStateOf("")
@@ -25,7 +24,6 @@ class ProductoView {
     var stock by mutableStateOf("")
     var productos by mutableStateOf(listOf<Producto>())
 
-    // Callbacks que el controlador configurará
     var onNombreChanged: (String) -> Unit = {}
     var onDescripcionChanged: (String) -> Unit = {}
     var onPrecioChanged: (String) -> Unit = {}
@@ -62,7 +60,6 @@ class ProductoView {
                 modifier = Modifier.padding(bottom = 16.dp)
             )
 
-            // Formulario para agregar productos
             FormularioProducto()
 
             Spacer(modifier = Modifier.height(16.dp))
@@ -74,7 +71,6 @@ class ProductoView {
                 modifier = Modifier.padding(bottom = 8.dp)
             )
 
-            // Lista de productos
             LazyColumn {
                 items(productos) { producto ->
                     ProductoCard(producto = producto)
