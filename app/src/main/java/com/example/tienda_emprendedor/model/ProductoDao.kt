@@ -62,12 +62,14 @@ class ProductoDao {
 
         productos
     }
-
     suspend fun obtenerProductoPorId(id: Int): Producto? = withContext(Dispatchers.IO) {
         var producto: Producto? = null
         val connection = DatabaseConnection.obtenerConexion()
-
         try {
+            if (connection == null) {
+                return@withContext null
+            }
+
             val query = """
                 SELECT p.*, c.nombre as categoria_nombre
                 FROM producto p
@@ -75,24 +77,23 @@ class ProductoDao {
                 WHERE p.id = ?
             """.trimIndent()
 
-            val statement = connection?.prepareStatement(query)
-            // Código ya actualizado completamente arribad)
-            val resultSet = statement?.executeQuery()
+            val statement = connection.prepareStatement(query)
+            statement.setInt(1, id)
+            val resultSet = statement.executeQuery()
 
-            if (resultSet?.next() == true) {
+            if (resultSet.next()) {
                 producto = mapearProductoConCategoria(resultSet)
             }
 
-            resultSet?.close()
-            statement?.close()
+            resultSet.close()
+            statement.close()
         } catch (e: Exception) {
-            println("Error al obtener producto por ID: ${e.message}")
             e.printStackTrace()
         } finally {
             DatabaseConnection.cerrarConexion(connection)
         }
 
-        producto
+        return@withContext producto
     }
 
     suspend fun obtenerProductosPorCategoria(categoriaId: Int): List<Producto> = withContext(Dispatchers.IO) {

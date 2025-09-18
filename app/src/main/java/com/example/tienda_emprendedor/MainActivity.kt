@@ -14,6 +14,8 @@ import androidx.compose.ui.unit.sp
 import com.example.tienda_emprendedor.ui.theme.Tienda_emprendedorTheme
 import com.example.tienda_emprendedor.controller.ProductoController
 import com.example.tienda_emprendedor.controller.CategoriaController
+import com.example.tienda_emprendedor.controller.ClienteController
+import com.example.tienda_emprendedor.controller.VentaController
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -24,16 +26,18 @@ class MainActivity : ComponentActivity() {
     // Controladores
     private lateinit var productoController: ProductoController
     private lateinit var categoriaController: CategoriaController
+    private lateinit var clienteController: ClienteController
+    private lateinit var ventaController: VentaController
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
-        // Inicializar base de datos primero
         inicializarBaseDatos()
 
-        // Inicializar controladores
         productoController = ProductoController()
         categoriaController = CategoriaController()
+        clienteController = ClienteController()
+        ventaController = VentaController()
 
         setContent {
             Tienda_emprendedorTheme {
@@ -83,7 +87,7 @@ class MainActivity : ComponentActivity() {
 
                     Row(
                         modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        horizontalArrangement = Arrangement.spacedBy(6.dp)
                     ) {
                         Button(
                             onClick = { pantallaActual = "productos" },
@@ -95,7 +99,7 @@ class MainActivity : ComponentActivity() {
                                     MaterialTheme.colorScheme.secondary
                             )
                         ) {
-                            Text("🌬️ Productos")
+                            Text("🌬️ Productos", fontSize = 12.sp)
                         }
 
                         Button(
@@ -108,7 +112,33 @@ class MainActivity : ComponentActivity() {
                                     MaterialTheme.colorScheme.secondary
                             )
                         ) {
-                            Text("🏷️ Categorías")
+                            Text("🏷️ Categorías", fontSize = 12.sp)
+                        }
+
+                        Button(
+                            onClick = { pantallaActual = "clientes" },
+                            modifier = Modifier.weight(1f),
+                            colors = ButtonDefaults.buttonColors(
+                                containerColor = if (pantallaActual == "clientes")
+                                    MaterialTheme.colorScheme.primary
+                                else
+                                    MaterialTheme.colorScheme.secondary
+                            )
+                        ) {
+                            Text("👥 Clientes", fontSize = 12.sp)
+                        }
+
+                        Button(
+                            onClick = { pantallaActual = "ventas" },
+                            modifier = Modifier.weight(1f),
+                            colors = ButtonDefaults.buttonColors(
+                                containerColor = if (pantallaActual == "ventas")
+                                    MaterialTheme.colorScheme.primary
+                                else
+                                    MaterialTheme.colorScheme.secondary
+                            )
+                        ) {
+                            Text("🛒 Ventas", fontSize = 12.sp)
                         }
                     }
                 }
@@ -118,6 +148,8 @@ class MainActivity : ComponentActivity() {
             when (pantallaActual) {
                 "productos" -> productoController.obtenerVista().Render()
                 "categorias" -> categoriaController.obtenerVista().Render()
+                "clientes" -> clienteController.obtenerVista().Render()
+                "ventas" -> ventaController.obtenerVista().Render()
             }
         }
     }

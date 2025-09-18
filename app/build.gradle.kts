@@ -63,6 +63,15 @@ dependencies {
     implementation(libs.postgresql)
     // Libreria Pcs (utilidades)
     implementation(libs.libreria.pcs)
+    // Stripe SDK
+    implementation("com.stripe:stripe-android:20.34.0")
+
+    // HTTP Client para comunicarse con Stripe API
+    implementation("com.squareup.okhttp3:okhttp:4.12.0")
+    implementation("com.squareup.okhttp3:logging-interceptor:4.12.0")
+
+    // JSON parsing
+    implementation("org.json:json:20231013")
     testImplementation(libs.junit)
     androidTestImplementation(libs.androidx.junit)
     androidTestImplementation(libs.androidx.espresso.core)
