@@ -14,6 +14,9 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.tienda_emprendedor.model.*
+import com.stripe.android.paymentsheet.PaymentSheet
+import com.stripe.android.paymentsheet.PaymentSheetResult
+import com.stripe.android.paymentsheet.rememberPaymentSheet
 import java.text.DecimalFormat
 
 class VentaView {
@@ -36,7 +39,11 @@ class VentaView {
     var busquedaProducto by mutableStateOf("")
     var vistaActual by mutableStateOf("lista") // "lista", "nueva_venta", "pago"
 
-    // Lista de ventas
+    // Estados de pago
+    var estadoPago by mutableStateOf("inicial") // "inicial", "procesando", "listo_para_pagar", "completado", "error", "cancelado"
+    var clientSecret by mutableStateOf("")
+    var mensajeError by mutableStateOf("")
+
     var ventas by mutableStateOf(listOf<Venta>())
     var ventaParaPago by mutableStateOf<Venta?>(null)
 
@@ -55,6 +62,7 @@ class VentaView {
     var onIrAPagoClick: (Venta) -> Unit = { _ -> }
     var onVolverAListaClick: () -> Unit = {}
     var onProcesarPagoStripeClick: ((Venta) -> Unit)? = null
+    var onPaymentResultCallback: ((Boolean, String?, String?) -> Unit)? = null
 
     fun actualizarVentas(nuevasVentas: List<Venta>) {
         println("📋 VentaView: Actualizando ventas. Cantidad: ${nuevasVentas.size}")
@@ -846,6 +854,7 @@ class VentaView {
 
     private fun formatearFecha(fechaTimestamp: String): String {
         return try {
+            // Simplificado - puedes mejorar el formateo según necesites
             fechaTimestamp.substring(0, 16).replace("T", " ")
         } catch (e: Exception) {
             fechaTimestamp

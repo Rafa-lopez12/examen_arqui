@@ -5,13 +5,16 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import com.example.tienda_emprendedor.model.*
 import com.example.tienda_emprendedor.view.VentaView
+import com.example.tienda_emprendedor.service.StripeService
 
 class VentaController {
 
     private val ventaDao: VentaDao = VentaDao()
     private val clienteDao: ClienteDao = ClienteDao()
     private val productoDao: ProductoDao = ProductoDao()
+    private val pagoDao: PagoDao = PagoDao()
     private val vista: VentaView = VentaView()
+    private val stripeService: StripeService = StripeService()
     private val scope = CoroutineScope(Dispatchers.Main)
 
     init {
@@ -58,6 +61,46 @@ class VentaController {
 
         vista.onVolverAListaClick = {
             volverALista()
+        }
+
+        // NUEVO: Configurar el callback de pago con Stripe
+        vista.onProcesarPagoStripeClick = { venta ->
+            procesarPagoConStripe(venta)
+        }
+
+        // Configurar callback para resultado del pago
+        vista.onPaymentResultCallback = { success, paymentIntentId, error ->
+            onPaymentResult(success, paymentIntentId, error)
+        }
+    }
+
+    private fun procesarPagoConStripe(venta: Venta) {
+        println("💳 ===== INICIANDO PAGO CON STRIPE =====")
+        println("Venta ID: ${venta.id}")
+        println("Cliente: ${venta.nombreCliente} ${venta.apellidoCliente}")
+        println("Monto: ${venta.total}")
+
+        // Por ahora, simular que el pago fue exitoso
+        println("🎯 Callback de Stripe configurado correctamente")
+
+        scope.launch {
+            try {
+                // Simular un delay de procesamiento
+                kotlinx.coroutines.delay(1000)
+
+                // Actualizar estado de venta a completada
+                val exito = ventaDao.actualizarEstadoVenta(venta.id, "completada")
+                if (exito) {
+                    println("✅ Estado de venta actualizado a 'completada'")
+                    // Volver a la lista de ventas
+                    vista.vistaActual = "lista"
+                    cargarVentasDesdeModelo()
+                } else {
+                    println("❌ Error al actualizar estado de venta")
+                }
+            } catch (e: Exception) {
+                println("❌ Error procesando pago: ${e.message}")
+            }
         }
     }
 
