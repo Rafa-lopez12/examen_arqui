@@ -12,7 +12,7 @@ class CategoriaDao {
         val connection = DatabaseConnection.obtenerConexion()
 
         try {
-            val query = "SELECT * FROM categorias WHERE activo = true ORDER BY nombre, subcategoria"
+            val query = "SELECT * FROM categoria WHERE activo = true ORDER BY nombre, subcategoria"
             val statement = connection?.prepareStatement(query)
             val resultSet = statement?.executeQuery()
 
@@ -37,7 +37,7 @@ class CategoriaDao {
         val connection = DatabaseConnection.obtenerConexion()
 
         try {
-            val query = "SELECT * FROM categorias WHERE id = ? AND activo = true"
+            val query = "SELECT * FROM categoria WHERE id = ? AND activo = true"
             val statement = connection?.prepareStatement(query)
             statement?.setInt(1, id)
             val resultSet = statement?.executeQuery()
@@ -64,7 +64,7 @@ class CategoriaDao {
 
         try {
             val query = """
-                INSERT INTO categorias (nombre, subcategoria, descripcion, activo) 
+                INSERT INTO categoria (nombre, subcategoria, descripcion, activo) 
                 VALUES (?, ?, ?, ?) 
                 ON CONFLICT (nombre, subcategoria) DO NOTHING
             """.trimIndent()
@@ -95,7 +95,7 @@ class CategoriaDao {
 
         try {
             val query = """
-                UPDATE categorias 
+                UPDATE categoria 
                 SET nombre = ?, subcategoria = ?, descripcion = ?, activo = ? 
                 WHERE id = ?
             """.trimIndent()
@@ -127,7 +127,7 @@ class CategoriaDao {
 
         try {
             // Soft delete - marcamos como inactiva
-            val query = "UPDATE categorias SET activo = false WHERE id = ?"
+            val query = "UPDATE categoria SET activo = false WHERE id = ?"
             val statement = connection?.prepareStatement(query)
             statement?.setInt(1, id)
 
@@ -150,7 +150,7 @@ class CategoriaDao {
         val connection = DatabaseConnection.obtenerConexion()
 
         try {
-            val query = "SELECT COUNT(*) as total FROM productos WHERE categoria_id = ?"
+            val query = "SELECT COUNT(*) as total FROM producto WHERE categoria_id = ?"
             val statement = connection?.prepareStatement(query)
             statement?.setInt(1, categoriaId)
             val resultSet = statement?.executeQuery()
@@ -177,7 +177,7 @@ class CategoriaDao {
 
         try {
             val query = """
-                SELECT * FROM categorias 
+                SELECT * FROM categoria
                 WHERE nombre = ? AND activo = true 
                 ORDER BY subcategoria
             """.trimIndent()
