@@ -135,6 +135,9 @@ class VentaView {
         busquedaCliente = ""
         busquedaProducto = ""
         productoSeleccionado = null
+        estadoPago = "inicial"
+        clientSecret = ""
+        mensajeError = ""
     }
 
     fun obtenerVentaActual(): Venta {
@@ -296,6 +299,49 @@ class VentaView {
 
     @Composable
     private fun VistaPago() {
+        // ✅ Configurar PaymentSheet de Stripe
+        val paymentSheet = rememberPaymentSheet { paymentResult ->
+            when (paymentResult) {
+                is PaymentSheetResult.Completed -> {
+                    println("✅ Pago completado exitosamente con Stripe")
+                    // Extraer PaymentIntent ID del client secret
+                    val paymentIntentId = clientSecret.split("_secret_").firstOrNull() ?: ""
+                    onPaymentResultCallback?.invoke(true, paymentIntentId, null)
+                }
+                is PaymentSheetResult.Canceled -> {
+                    println("❌ Pago cancelado por el usuario")
+                    estadoPago = "cancelado"
+                    onPaymentResultCallback?.invoke(false, null, "Pago cancelado por el usuario")
+                }
+                is PaymentSheetResult.Failed -> {
+                    val error = paymentResult.error.localizedMessage ?: paymentResult.error.message ?: "Error desconocido"
+                    println("❌ Pago falló: $error")
+                    estadoPago = "error"
+                    mensajeError = error
+                    onPaymentResultCallback?.invoke(false, null, error)
+                }
+            }
+        }
+
+        // ✅ Efecto para mostrar PaymentSheet automáticamente cuando esté listo
+        LaunchedEffect(estadoPago, clientSecret) {
+            if (estadoPago == "listo_para_pagar" && clientSecret.isNotEmpty()) {
+                try {
+                    println("🎨 Mostrando PaymentSheet con clientSecret: ${clientSecret.substring(0, 20)}...")
+
+                    val configuration = PaymentSheet.Configuration.Builder("Aires Acondicionados")
+                        .build()
+
+                    paymentSheet.presentWithPaymentIntent(clientSecret, configuration)
+
+                } catch (e: Exception) {
+                    println("❌ Error mostrando PaymentSheet: ${e.message}")
+                    estadoPago = "error"
+                    mensajeError = "Error mostrando el formulario de pago: ${e.message}"
+                }
+            }
+        }
+
         Column(
             modifier = Modifier
                 .fillMaxSize()
@@ -342,9 +388,9 @@ class VentaView {
                         Spacer(modifier = Modifier.height(8.dp))
 
                         Text("Cliente: ${venta.nombreCliente} ${venta.apellidoCliente}")
-                        Text("Total: ${DecimalFormat("#,##0.00").format(venta.total)}")
+                        Text("Total: $${DecimalFormat("#,##0.00").format(venta.total)}")
                         if (venta.descuento > 0) {
-                            Text("Descuento: -${DecimalFormat("#,##0.00").format(venta.descuento)}")
+                            Text("Descuento: -$${DecimalFormat("#,##0.00").format(venta.descuento)}")
                         }
                         if (venta.notas.isNotEmpty()) {
                             Text("Notas: ${venta.notas}")
@@ -352,31 +398,186 @@ class VentaView {
                     }
                 }
 
-                // Botón de pago con Stripe
-                Button(
-                    onClick = {
-                        onProcesarPagoStripeClick?.invoke(venta)
-                    },
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(56.dp),
-                    colors = ButtonDefaults.buttonColors(
-                        containerColor = MaterialTheme.colorScheme.primary
-                    )
-                ) {
-                    Text(
-                        text = "💳 PAGAR CON STRIPE - ${DecimalFormat("#,##0.00").format(venta.total)}",
-                        fontSize = 18.sp,
-                        fontWeight = FontWeight.Bold,
-                        color = Color.White
-                    )
+                // ✅ ESTADOS DEL PAGO
+                when (estadoPago) {
+                    "inicial" -> {
+                        // Botón para iniciar el pago
+                        Button(
+                            onClick = {
+                                ventaParaPago?.let { venta ->
+                                    onProcesarPagoStripeClick?.invoke(venta)
+                                }
+                            },
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(56.dp),
+                            colors = ButtonDefaults.buttonColors(
+                                containerColor = MaterialTheme.colorScheme.primary
+                            )
+                        ) {
+                            Text(
+                                text = "💳 PAGAR CON STRIPE - $${DecimalFormat("#,##0.00").format(venta.total)}",
+                                fontSize = 18.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = Color.White
+                            )
+                        }
+                    }
+
+                    "procesando" -> {
+                        // Indicador de carga
+                        Card(
+                            modifier = Modifier.fillMaxWidth(),
+                            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.secondaryContainer)
+                        ) {
+                            Column(
+                                modifier = Modifier.padding(24.dp),
+                                horizontalAlignment = Alignment.CenterHorizontally
+                            ) {
+                                CircularProgressIndicator()
+                                Spacer(modifier = Modifier.height(16.dp))
+                                Text(
+                                    text = "⏳ Procesando pago...",
+                                    fontSize = 16.sp,
+                                    fontWeight = FontWeight.SemiBold
+                                )
+                                Text(
+                                    text = "Preparando el formulario de pago seguro",
+                                    fontSize = 14.sp,
+                                    color = Color.Gray
+                                )
+                            }
+                        }
+                    }
+
+                    "listo_para_pagar" -> {
+                        // El PaymentSheet se muestra automáticamente
+                        Card(
+                            modifier = Modifier.fillMaxWidth(),
+                            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primaryContainer)
+                        ) {
+                            Column(
+                                modifier = Modifier.padding(24.dp),
+                                horizontalAlignment = Alignment.CenterHorizontally
+                            ) {
+                                Text(
+                                    text = "🔒 Formulario de Pago Listo",
+                                    fontSize = 18.sp,
+                                    fontWeight = FontWeight.Bold
+                                )
+                                Text(
+                                    text = "El formulario de pago seguro debería aparecer automáticamente",
+                                    fontSize = 14.sp,
+                                    color = Color.Gray,
+                                    modifier = Modifier.padding(top = 8.dp)
+                                )
+                            }
+                        }
+                    }
+
+                    "completado" -> {
+                        // Pago exitoso
+                        Card(
+                            modifier = Modifier.fillMaxWidth(),
+                            colors = CardDefaults.cardColors(containerColor = Color(0xFF4CAF50))
+                        ) {
+                            Column(
+                                modifier = Modifier.padding(24.dp),
+                                horizontalAlignment = Alignment.CenterHorizontally
+                            ) {
+                                Text(
+                                    text = "✅ ¡Pago Completado Exitosamente!",
+                                    fontSize = 18.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = Color.White
+                                )
+                                Text(
+                                    text = "La venta ha sido procesada correctamente",
+                                    fontSize = 14.sp,
+                                    color = Color.White,
+                                    modifier = Modifier.padding(top = 8.dp)
+                                )
+                            }
+                        }
+                    }
+
+                    "error" -> {
+                        // Error en el pago
+                        Card(
+                            modifier = Modifier.fillMaxWidth(),
+                            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.errorContainer)
+                        ) {
+                            Column(modifier = Modifier.padding(16.dp)) {
+                                Text(
+                                    text = "❌ Error en el Pago",
+                                    fontSize = 18.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = MaterialTheme.colorScheme.onErrorContainer
+                                )
+                                if (mensajeError.isNotEmpty()) {
+                                    Text(
+                                        text = mensajeError,
+                                        fontSize = 14.sp,
+                                        color = MaterialTheme.colorScheme.onErrorContainer,
+                                        modifier = Modifier.padding(top = 8.dp)
+                                    )
+                                }
+                            }
+                        }
+
+                        // Botón para reintentar
+                        Button(
+                            onClick = {
+                                estadoPago = "inicial"
+                                mensajeError = ""
+                            },
+                            modifier = Modifier.fillMaxWidth(),
+                            colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary)
+                        ) {
+                            Text("🔄 Reintentar Pago")
+                        }
+                    }
+
+                    "cancelado" -> {
+                        // Pago cancelado
+                        Card(
+                            modifier = Modifier.fillMaxWidth(),
+                            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
+                        ) {
+                            Column(modifier = Modifier.padding(16.dp)) {
+                                Text(
+                                    text = "⚠️ Pago Cancelado",
+                                    fontSize = 18.sp,
+                                    fontWeight = FontWeight.Bold
+                                )
+                                Text(
+                                    text = "El pago fue cancelado. Puedes intentar nuevamente.",
+                                    fontSize = 14.sp,
+                                    color = Color.Gray,
+                                    modifier = Modifier.padding(top = 8.dp)
+                                )
+                            }
+                        }
+
+                        // Botón para reintentar
+                        Button(
+                            onClick = {
+                                estadoPago = "inicial"
+                                mensajeError = ""
+                            },
+                            modifier = Modifier.fillMaxWidth(),
+                            colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary)
+                        ) {
+                            Text("🔄 Intentar Nuevamente")
+                        }
+                    }
                 }
 
                 Spacer(modifier = Modifier.height(16.dp))
 
-                // Información adicional
+                // Información adicional sobre Stripe
                 Card(
-                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.secondaryContainer)
+                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.tertiaryContainer)
                 ) {
                     Column(modifier = Modifier.padding(16.dp)) {
                         Text(
@@ -384,7 +585,7 @@ class VentaView {
                             fontWeight = FontWeight.SemiBold
                         )
                         Text(
-                            text = "• Acepta tarjetas de crédito y débito\n• Procesamiento seguro y encriptado\n• Sin necesidad de ingresar datos de tarjeta manualmente",
+                            text = "• Acepta tarjetas de crédito y débito\n• Procesamiento seguro y encriptado\n• Cumple con estándares PCI DSS\n• Soporte para múltiples métodos de pago",
                             fontSize = 14.sp,
                             color = Color.Gray
                         )
