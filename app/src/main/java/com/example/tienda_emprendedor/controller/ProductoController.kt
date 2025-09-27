@@ -30,7 +30,7 @@ class ProductoController {
         }
 
         vista.onCategoriaChanged = { categoria ->
-            // Cuando cambia la categoría, actualizar la subcategoría automáticamente
+
             vista.subcategoriaSeleccionada = categoria.subcategoria
         }
     }
@@ -54,14 +54,14 @@ class ProductoController {
                     val exito = modelo.insertarProducto(producto)
                     if (exito) {
                         vista.limpiarFormulario()
-                        cargarProductosDesdeModelo()
-                        println("✅ Producto agregado: ${producto.nombre}")
+                        cargarProductos()
+                        println("Producto agregado: ${producto.nombre}")
                     } else {
-                        println("❌ Error al agregar producto")
+                        println("Error al agregar producto")
                     }
                 }
             } else {
-                println("❌ Faltan campos obligatorios")
+                println("Faltan campos obligatorios")
             }
         }
 
@@ -69,10 +69,10 @@ class ProductoController {
             scope.launch {
                 val exito = modelo.eliminarProducto(producto.id)
                 if (exito) {
-                    cargarProductosDesdeModelo()
-                    println("✅ Producto eliminado: ${producto.nombre}")
+                    cargarProductos()
+                    println(" eliminado: ${producto.nombre}")
                 } else {
-                    println("❌ Error al eliminar producto")
+                    println("Error al eliminar producto")
                 }
             }
         }
@@ -84,7 +84,7 @@ class ProductoController {
 
         private fun cargarDatosIniciales() {
             cargarCategoriasDisponibles()
-            cargarProductosDesdeModelo()
+            cargarProductos()
         }
 
         private fun cargarCategoriasDisponibles() {
@@ -95,7 +95,7 @@ class ProductoController {
             }
         }
 
-        private fun cargarProductosDesdeModelo() {
+        private fun cargarProductos() {
             scope.launch {
                 val productos = modelo.obtenerTodosLosProductosConCategoria()
                 vista.actualizarProductos(productos)
@@ -103,7 +103,7 @@ class ProductoController {
             }
         }
 
-        // Método para filtrar productos por categoría
+
         fun filtrarPorCategoria(categoriaId: Int) {
             scope.launch {
                 val productos = modelo.obtenerProductosPorCategoria(categoriaId)
@@ -111,7 +111,7 @@ class ProductoController {
             }
         }
 
-        // Método para filtrar productos por subcategoría
+
         fun filtrarPorSubcategoria(subcategoria: String) {
             scope.launch {
                 val productos = modelo.obtenerProductosPorSubcategoria(subcategoria)

@@ -101,7 +101,6 @@ class ProductoView {
             }
         }
 
-        // Dialog para mostrar detalle del producto
         if (mostrarDetalleProducto) {
             ProductoDetailDialog(
                 producto = productoSeleccionado,

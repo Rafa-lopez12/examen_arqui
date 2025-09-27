@@ -21,12 +21,9 @@ import java.text.DecimalFormat
 
 class VentaView {
 
-    // Estados para nueva venta
     var clienteSeleccionado by mutableStateOf<Cliente?>(null)
     var productosDisponibles by mutableStateOf(listOf<Producto>())
     var clientesDisponibles by mutableStateOf(listOf<Cliente>())
-
-    // Carrito de compra
     var itemsCarrito by mutableStateOf(mutableMapOf<Int, DetalleVenta>())
     var descuento by mutableStateOf("")
     var notas by mutableStateOf("")
@@ -204,7 +201,7 @@ class VentaView {
 
                 Button(
                     onClick = {
-                        println("🆕 Botón Nueva Venta clickeado")
+                        println("Botón Nueva Venta clickeado")
                         limpiarCarrito()
                         vistaActual = "nueva_venta"
                         onNuevaVentaClick()

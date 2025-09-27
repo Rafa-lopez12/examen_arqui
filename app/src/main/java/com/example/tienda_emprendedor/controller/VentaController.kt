@@ -18,10 +18,10 @@ class VentaController {
     private val scope = CoroutineScope(Dispatchers.Main)
 
     init {
-        println("🔧 Inicializando VentaController...")
+        println("Inicializando VentaController...")
         configurarEventosVista()
         cargarDatosIniciales()
-        println("✅ VentaController inicializado")
+        println("VentaController inicializado")
     }
 
     private fun configurarEventosVista() {
@@ -34,7 +34,7 @@ class VentaController {
         }
 
         vista.onAgregarProductoClick = { producto, cantidad ->
-            println("✅ Producto agregado desde controlador: ${producto.nombre} x$cantidad")
+            println("Producto agregado desde controlador: ${producto.nombre} x$cantidad")
         }
 
         vista.onEliminarItemCarritoClick = { productoId ->
@@ -61,7 +61,6 @@ class VentaController {
             volverALista()
         }
 
-        // ✅ INTEGRACIÓN REAL CON STRIPE
         vista.onProcesarPagoStripeClick = { venta ->
             procesarPagoConStripe(venta)
         }
@@ -72,7 +71,7 @@ class VentaController {
     }
 
     private fun procesarPagoConStripe(venta: Venta) {
-        println("💳 ===== INICIANDO PAGO REAL CON STRIPE =====")
+        println("INICIANDO PAGO REAL CON STRIPE =====")
         println("Venta ID: ${venta.id}")
         println("Cliente: ${venta.nombreCliente} ${venta.apellidoCliente}")
         println("Monto: \$${venta.total}")
@@ -85,7 +84,7 @@ class VentaController {
 
                 println("🔧 Creando PaymentIntent...")
 
-                // Convertir dólares a centavos para Stripe
+
                 val amountInCents = stripeService.dollarsToCents(venta.total)
                 val description = "Venta #${venta.id} - ${venta.nombreCliente} ${venta.apellidoCliente}"
 
@@ -238,7 +237,7 @@ class VentaController {
                 }
 
                 println("✅ Stock verificado, creando venta...")
-                val ventaId = ventaDao.insertarVenta(venta, detalles)
+                val ventaId = ventaDao.generarVenta(venta, detalles)
 
                 if (ventaId > 0) {
                     println("✅ Venta creada exitosamente con ID: $ventaId")

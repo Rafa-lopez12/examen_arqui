@@ -7,17 +7,10 @@ import java.sql.SQLException
 class DatabaseConnection {
 
     companion object {
-        // ⚠️ IMPORTANTE: En Android, NO puedes usar "localhost"
-        // Opciones para la URL:
 
-        // Opción 1: IP de tu computadora en la red local (recomendada para testing)
         //private const val URL = "jdbc:postgresql://192.168.1.100:5432/Tienda_Emprendor"
-
-        // Opción 2: Si usas emulador de Android Studio
         private const val URL = "jdbc:postgresql://10.0.2.2:5432/Tienda_Emprendor"
 
-        // Opción 3: Servidor en la nube
-        // private const val URL = "jdbc:postgresql://tu-servidor.com:5432/Tienda_Emprendor"
 
         private const val USER = "postgres"
         private const val PASSWORD = "leyendas13"

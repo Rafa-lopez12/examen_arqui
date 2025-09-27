@@ -21,15 +21,15 @@ class CategoriaController {
 
     private fun configurarEventosVista() {
         vista.onNombreChanged = { nombre ->
-            // El nombre se actualiza automáticamente cuando selecciona del dropdown
+
         }
 
         vista.onSubcategoriaChanged = { subcategoria ->
-            // La subcategoría se actualiza automáticamente cuando selecciona del dropdown
+
         }
 
         vista.onDescripcionChanged = { descripcion ->
-            // Se maneja automáticamente en la vista
+
         }
 
         vista.onAgregarClick = {
@@ -43,7 +43,6 @@ class CategoriaController {
 
     private fun agregarCategoria() {
         if (vista.nombre.isNotEmpty() && vista.subcategoria.isNotEmpty()) {
-            // Validar que sea una combinación válida
             if (SubcategoriaUtils.esSubcategoriaValida(vista.nombre, vista.subcategoria)) {
                 val categoria = Categoria(
                     nombre = vista.nombre,
@@ -74,18 +73,17 @@ class CategoriaController {
 
     private fun eliminarCategoria(categoria: Categoria) {
         scope.launch {
-            // Primero verificar si hay productos usando esta categoría
             val productosUsandoCategoria = modelo.contarProductosEnCategoria(categoria.id)
 
             if (productosUsandoCategoria > 0) {
-                println("⚠️ No se puede eliminar. Hay $productosUsandoCategoria productos usando esta categoría")
+                println("⚠No se puede eliminar. Hay $productosUsandoCategoria productos usando esta categoría")
             } else {
                 val exito = modelo.eliminarCategoria(categoria.id)
                 if (exito) {
                     cargarCategoriasDesdeModelo()
                     println("✅ Categoría eliminada: ${categoria.nombre} - ${categoria.subcategoria}")
                 } else {
-                    println("❌ Error al eliminar categoría")
+                    println("Error al eliminar categoría")
                 }
             }
         }
@@ -95,7 +93,7 @@ class CategoriaController {
         scope.launch {
             val categorias = modelo.obtenerTodasLasCategorias()
             vista.actualizarCategorias(categorias)
-            println("📋 Categorías cargadassss: ${categorias.size}")
+            println("Categorías cargadassss: ${categorias.size}")
         }
     }
 

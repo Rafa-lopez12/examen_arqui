@@ -7,8 +7,11 @@ import java.sql.PreparedStatement
 import java.sql.ResultSet
 import java.sql.Statement
 import java.sql.Timestamp
+import com.example.tienda_emprendedor.model.DetalleVentaDao
 
 class VentaDao {
+
+    private val detalleVentaDao = DetalleVentaDao()
 
     suspend fun obtenerTodasLasVentas(): List<Venta> = withContext(Dispatchers.IO) {
         val ventas = mutableListOf<Venta>()
@@ -59,8 +62,7 @@ class VentaDao {
 
             if (resultSet?.next() == true) {
                 venta = mapearVenta(resultSet)
-                // Cargar detalles de la venta
-                venta?.detalles = obtenerDetallesVenta(connection, id)
+                venta?.detalles = detalleVentaDao.obtenerDetallesPorVenta(id)
             }
 
             resultSet?.close()
@@ -75,18 +77,18 @@ class VentaDao {
         venta
     }
 
-    suspend fun insertarVenta(venta: Venta, detalles: List<DetalleVenta>): Int = withContext(Dispatchers.IO) {
+    suspend fun generarVenta(venta: Venta, detalles: List<DetalleVenta>): Int = withContext(Dispatchers.IO) {
         val connection = DatabaseConnection.obtenerConexion()
         var ventaId = 0
 
         try {
-            connection?.autoCommit = false // Iniciar transacción
+            connection?.autoCommit = false
 
-            // 1. Insertar venta principal
+
             val queryVenta = """
-                INSERT INTO venta (cliente_id, total, descuento, impuestos, metodo_pago, estado, notas) 
-                VALUES (?, ?, ?, ?, ?, ?, ?)
-            """.trimIndent()
+            INSERT INTO venta (cliente_id, total, descuento, impuestos, metodo_pago, estado, notas) 
+            VALUES (?, ?, ?, ?, ?, ?, ?)
+        """.trimIndent()
 
             val statementVenta = connection?.prepareStatement(queryVenta, Statement.RETURN_GENERATED_KEYS)
             statementVenta?.setInt(1, venta.clienteId)
@@ -103,41 +105,28 @@ class VentaDao {
                 val generatedKeys = statementVenta?.generatedKeys
                 if (generatedKeys?.next() == true) {
                     ventaId = generatedKeys.getInt(1)
+                    println("Venta insertada con ID: $ventaId")
                 }
             }
 
             statementVenta?.close()
 
-            // 2. Insertar detalles de venta
             if (ventaId > 0 && detalles.isNotEmpty()) {
-                val queryDetalle = """
-                    INSERT INTO detalle_venta (venta_id, producto_id, cantidad, precio_unitario, subtotal) 
-                    VALUES (?, ?, ?, ?, ?)
-                """.trimIndent()
+                val detallesExitoso = detalleVentaDao.insertarDetalles(connection, ventaId, detalles)
 
-                val statementDetalle = connection?.prepareStatement(queryDetalle)
-
-                detalles.forEach { detalle ->
-                    statementDetalle?.setInt(1, ventaId)
-                    statementDetalle?.setInt(2, detalle.productoId)
-                    statementDetalle?.setInt(3, detalle.cantidad)
-                    statementDetalle?.setDouble(4, detalle.precioUnitario)
-                    statementDetalle?.setDouble(5, detalle.calcularSubtotal())
-                    statementDetalle?.addBatch()
+                if (!detallesExitoso) {
+                    throw Exception("Error al insertar detalles de venta")
                 }
-
-                statementDetalle?.executeBatch()
-                statementDetalle?.close()
             }
 
-            // 3. Actualizar stock de productos
+
             actualizarStockProductos(connection, detalles)
 
-            connection?.commit() // Confirmar transacción
-            println("✅ Venta creada exitosamente con ID: $ventaId")
+            connection?.commit()
+            println("Venta creada exitosamente con ID: $ventaId")
 
         } catch (e: Exception) {
-            connection?.rollback() // Revertir transacción
+            connection?.rollback()
             println("Error al insertar venta: ${e.message}")
             e.printStackTrace()
             ventaId = 0
@@ -241,20 +230,26 @@ class VentaDao {
     private fun actualizarStockProductos(connection: Connection?, detalles: List<DetalleVenta>) {
         try {
             val query = "UPDATE producto SET stock = stock - ? WHERE id = ?"
-            val statement = connection?.prepareStatement(query)
 
             detalles.forEach { detalle ->
+                val statement = connection?.prepareStatement(query)
                 statement?.setInt(1, detalle.cantidad)
                 statement?.setInt(2, detalle.productoId)
-                statement?.addBatch()
+
+                val filasAfectadas = statement?.executeUpdate() ?: 0
+                if (filasAfectadas <= 0) {
+                    println("⚠No se pudo actualizar stock para producto ID: ${detalle.productoId}")
+                }
+
+                statement?.close()
             }
 
-            statement?.executeBatch()
-            statement?.close()
+            println("Stock actualizado para ${detalles.size} productos")
+
         } catch (e: Exception) {
             println("Error al actualizar stock de productos: ${e.message}")
             e.printStackTrace()
-            throw e // Re-lanzar para que la transacción falle
+            throw e
         }
     }
 
