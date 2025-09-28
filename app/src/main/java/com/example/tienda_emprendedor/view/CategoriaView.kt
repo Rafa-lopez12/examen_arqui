@@ -73,13 +73,11 @@ class CategoriaView {
 
             Spacer(modifier = Modifier.height(16.dp))
 
-            // Formulario para agregar categoría
             if (mostrarFormulario) {
                 FormularioCategoria()
                 Spacer(modifier = Modifier.height(16.dp))
             }
 
-            // Información de categorías predefinidas
             Card(
                 modifier = Modifier.fillMaxWidth(),
                 colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.secondaryContainer)

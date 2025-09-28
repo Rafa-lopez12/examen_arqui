@@ -122,7 +122,6 @@ class ClienteView {
     }
 
     fun obtenerClienteActual(): Cliente {
-        // Obtener fecha actual en formato yyyy-MM-dd (compatible con API 24)
         val fechaActual = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()).format(Date())
 
         return Cliente(
@@ -164,11 +163,9 @@ class ClienteView {
                 Spacer(modifier = Modifier.height(16.dp))
             }
 
-            // Lista de clientes
             ListaClientes()
         }
 
-        // Diálogo de confirmación para eliminar
         if (mostrarDialogoConfirmacion && clienteAEliminar != null) {
             ConfirmacionEliminarDialog(
                 cliente = clienteAEliminar!!,

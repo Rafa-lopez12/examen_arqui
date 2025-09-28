@@ -58,9 +58,9 @@ class CategoriaController {
                         vista.limpiarFormulario()
                         vista.mostrarFormulario = false
                         cargarCategoriasDesdeModelo()
-                        println("✅ Categoría creada: ${categoria.nombre} - ${categoria.subcategoria}")
+                        println(" Categoría creada: ${categoria.nombre} - ${categoria.subcategoria}")
                     } else {
-                        println("❌ Error al crear categoría (posiblemente duplicada)")
+                        println("Error al crear categoría (posiblemente duplicada)")
                     }
                 }
             } else {

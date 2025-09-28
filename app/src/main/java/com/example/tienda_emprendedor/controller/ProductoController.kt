@@ -97,7 +97,7 @@ class ProductoController {
 
         private fun cargarProductos() {
             scope.launch {
-                val productos = modelo.obtenerTodosLosProductosConCategoria()
+                val productos = modelo.obtenerTodosLosProductos()
                 vista.actualizarProductos(productos)
                 println("📦 Productos cargados: ${productos.size}")
             }

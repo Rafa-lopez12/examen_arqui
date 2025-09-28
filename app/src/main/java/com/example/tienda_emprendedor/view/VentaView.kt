@@ -14,9 +14,6 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.tienda_emprendedor.model.*
-import com.stripe.android.paymentsheet.PaymentSheet
-import com.stripe.android.paymentsheet.PaymentSheetResult
-import com.stripe.android.paymentsheet.rememberPaymentSheet
 import java.text.DecimalFormat
 
 class VentaView {
@@ -24,28 +21,24 @@ class VentaView {
     var clienteSeleccionado by mutableStateOf<Cliente?>(null)
     var productosDisponibles by mutableStateOf(listOf<Producto>())
     var clientesDisponibles by mutableStateOf(listOf<Cliente>())
+    var metodosPago by mutableStateOf(listOf<Pago>())
     var itemsCarrito by mutableStateOf(mutableMapOf<Int, DetalleVenta>())
     var descuento by mutableStateOf("")
     var notas by mutableStateOf("")
 
     // Estados de UI
-    var mostrarFormularioVenta by mutableStateOf(false)
-    var mostrarSelectorCliente by mutableStateOf(false)
-    var mostrarSelectorProducto by mutableStateOf(false)
+    var vistaActual by mutableStateOf("lista") // "lista", "nueva_venta", "seleccion_pago", "pago_stripe"
     var busquedaCliente by mutableStateOf("")
     var busquedaProducto by mutableStateOf("")
-    var vistaActual by mutableStateOf("lista") // "lista", "nueva_venta", "pago"
-
-    // Estados de pago
-    var estadoPago by mutableStateOf("inicial") // "inicial", "procesando", "listo_para_pagar", "completado", "error", "cancelado"
-    var clientSecret by mutableStateOf("")
-    var mensajeError by mutableStateOf("")
 
     var ventas by mutableStateOf(listOf<Venta>())
     var ventaParaPago by mutableStateOf<Venta?>(null)
+    var detallesParaPago by mutableStateOf(listOf<DetalleVenta>())
+
+    // 🆕 Referencia a PagoView
+    var pagoView by mutableStateOf<PagoView?>(null)
 
     // Estados para productos
-    var productoSeleccionado by mutableStateOf<Producto?>(null)
     var cantidadProducto by mutableStateOf("1")
 
     // Callbacks
@@ -58,14 +51,14 @@ class VentaView {
     var onBuscarProductosClick: (String) -> Unit = { _ -> }
     var onIrAPagoClick: (Venta) -> Unit = { _ -> }
     var onVolverAListaClick: () -> Unit = {}
-    var onProcesarPagoStripeClick: ((Venta) -> Unit)? = null
-    var onPaymentResultCallback: ((Boolean, String?, String?) -> Unit)? = null
+    var onSeleccionarMetodoPagoClick: (Venta, Int) -> Unit = { _, _ -> }
+    var onMostrarPagoViewClick: (Venta) -> Unit = { _ -> } // 🆕 Callback para mostrar PagoView
 
     fun actualizarVentas(nuevasVentas: List<Venta>) {
         println("📋 VentaView: Actualizando ventas. Cantidad: ${nuevasVentas.size}")
         ventas = nuevasVentas
         nuevasVentas.forEach { venta ->
-            println("  - Vista recibió venta #${venta.id}: ${venta.nombreCliente} - ${venta.total}")
+            println("  - Vista recibió venta #${venta.id}: ${venta.nombreCliente} - ${venta.total} - ${venta.metodoPago}")
         }
     }
 
@@ -75,6 +68,11 @@ class VentaView {
 
     fun actualizarClientesDisponibles(clientes: List<Cliente>) {
         clientesDisponibles = clientes
+    }
+
+    fun actualizarMetodosPago(metodos: List<Pago>) {
+        metodosPago = metodos
+        println("💳 VentaView: Métodos de pago actualizados: ${metodos.size}")
     }
 
     fun agregarAlCarrito(producto: Producto, cantidad: Int) {
@@ -131,10 +129,9 @@ class VentaView {
         cantidadProducto = "1"
         busquedaCliente = ""
         busquedaProducto = ""
-        productoSeleccionado = null
-        estadoPago = "inicial"
-        clientSecret = ""
-        mensajeError = ""
+        ventaParaPago = null
+        detallesParaPago = emptyList()
+        pagoView = null // 🆕 Limpiar referencia a PagoView
     }
 
     fun obtenerVentaActual(): Venta {
@@ -142,8 +139,8 @@ class VentaView {
             clienteId = clienteSeleccionado?.id ?: 0,
             total = calcularTotal(),
             descuento = calcularDescuentoMonto(),
-            impuestos = 0.0, // Puedes agregar lógica de impuestos aquí
-            metodoPago = "pendiente",
+            impuestos = 0.0,
+            pagoId = 0,
             estado = "pendiente",
             notas = notas.trim()
         )
@@ -166,9 +163,17 @@ class VentaView {
                 println("🆕 Renderizando nueva venta")
                 VistaNuevaVenta()
             }
-            "pago" -> {
-                println("💳 Renderizando vista de pago")
-                VistaPago()
+            "seleccion_pago" -> {
+                println("💳 Renderizando selección de método de pago")
+                VistaSeleccionPago()
+            }
+            "pago_stripe" -> {
+                println("💳 Renderizando PagoView para Stripe")
+                // 🆕 Mostrar PagoView en lugar de vista propia
+                pagoView?.Render() ?: run {
+                    // Fallback si no hay PagoView configurada
+                    VistaErrorPago()
+                }
             }
             else -> {
                 println("⚠️ Vista desconocida: $vistaActual")
@@ -179,14 +184,11 @@ class VentaView {
 
     @Composable
     private fun VistaListaVentas() {
-        println("📋 VistaListaVentas iniciando...")
-
         Column(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(16.dp)
         ) {
-            println("📋 Creando Row con header...")
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween,
@@ -213,9 +215,7 @@ class VentaView {
 
             Spacer(modifier = Modifier.height(16.dp))
 
-            println("📋 Verificando ventas. Total: ${ventas.size}")
             if (ventas.isEmpty()) {
-                println("📋 No hay ventas, mostrando mensaje vacío")
                 Card(
                     modifier = Modifier.fillMaxWidth(),
                     colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
@@ -227,7 +227,6 @@ class VentaView {
                     )
                 }
             } else {
-                println("📋 Mostrando ${ventas.size} ventas")
                 LazyColumn(
                     verticalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
@@ -237,8 +236,6 @@ class VentaView {
                 }
             }
         }
-
-        println("📋 VistaListaVentas completada")
     }
 
     @OptIn(ExperimentalMaterial3Api::class)
@@ -295,50 +292,7 @@ class VentaView {
     }
 
     @Composable
-    private fun VistaPago() {
-        // ✅ Configurar PaymentSheet de Stripe
-        val paymentSheet = rememberPaymentSheet { paymentResult ->
-            when (paymentResult) {
-                is PaymentSheetResult.Completed -> {
-                    println("✅ Pago completado exitosamente con Stripe")
-                    // Extraer PaymentIntent ID del client secret
-                    val paymentIntentId = clientSecret.split("_secret_").firstOrNull() ?: ""
-                    onPaymentResultCallback?.invoke(true, paymentIntentId, null)
-                }
-                is PaymentSheetResult.Canceled -> {
-                    println("❌ Pago cancelado por el usuario")
-                    estadoPago = "cancelado"
-                    onPaymentResultCallback?.invoke(false, null, "Pago cancelado por el usuario")
-                }
-                is PaymentSheetResult.Failed -> {
-                    val error = paymentResult.error.localizedMessage ?: paymentResult.error.message ?: "Error desconocido"
-                    println("❌ Pago falló: $error")
-                    estadoPago = "error"
-                    mensajeError = error
-                    onPaymentResultCallback?.invoke(false, null, error)
-                }
-            }
-        }
-
-        // ✅ Efecto para mostrar PaymentSheet automáticamente cuando esté listo
-        LaunchedEffect(estadoPago, clientSecret) {
-            if (estadoPago == "listo_para_pagar" && clientSecret.isNotEmpty()) {
-                try {
-                    println("🎨 Mostrando PaymentSheet con clientSecret: ${clientSecret.substring(0, 20)}...")
-
-                    val configuration = PaymentSheet.Configuration.Builder("Aires Acondicionados")
-                        .build()
-
-                    paymentSheet.presentWithPaymentIntent(clientSecret, configuration)
-
-                } catch (e: Exception) {
-                    println("❌ Error mostrando PaymentSheet: ${e.message}")
-                    estadoPago = "error"
-                    mensajeError = "Error mostrando el formulario de pago: ${e.message}"
-                }
-            }
-        }
-
+    private fun VistaSeleccionPago() {
         Column(
             modifier = Modifier
                 .fillMaxSize()
@@ -352,7 +306,7 @@ class VentaView {
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Text(
-                    text = "💳 Procesar Pago",
+                    text = "💳 Seleccionar Método de Pago",
                     fontSize = 24.sp,
                     fontWeight = FontWeight.Bold,
                     color = MaterialTheme.colorScheme.primary
@@ -360,8 +314,7 @@ class VentaView {
 
                 Button(
                     onClick = {
-                        vistaActual = "lista"
-                        onVolverAListaClick()
+                        vistaActual = "nueva_venta"
                     },
                     colors = ButtonDefaults.buttonColors(containerColor = Color.Gray)
                 ) {
@@ -369,7 +322,7 @@ class VentaView {
                 }
             }
 
-            // Información de la venta
+            // Resumen de la venta
             ventaParaPago?.let { venta ->
                 Card(
                     modifier = Modifier.fillMaxWidth(),
@@ -377,215 +330,139 @@ class VentaView {
                 ) {
                     Column(modifier = Modifier.padding(16.dp)) {
                         Text(
-                            text = "Resumen de Venta #${venta.id}",
+                            text = "📋 Resumen de Venta",
                             fontSize = 18.sp,
                             fontWeight = FontWeight.SemiBold
                         )
 
                         Spacer(modifier = Modifier.height(8.dp))
 
-                        Text("Cliente: ${venta.nombreCliente} ${venta.apellidoCliente}")
-                        Text("Total: $${DecimalFormat("#,##0.00").format(venta.total)}")
+                        Text("Cliente: ${clienteSeleccionado?.nombre} ${clienteSeleccionado?.apellido}")
+                        Text("Total: ${DecimalFormat("#,##0.00").format(venta.total)}")
                         if (venta.descuento > 0) {
-                            Text("Descuento: -$${DecimalFormat("#,##0.00").format(venta.descuento)}")
+                            Text("Descuento: -${DecimalFormat("#,##0.00").format(venta.descuento)}")
                         }
+                        Text("Productos: ${detallesParaPago.size} items")
                         if (venta.notas.isNotEmpty()) {
                             Text("Notas: ${venta.notas}")
                         }
                     }
                 }
+            }
 
-                // ✅ ESTADOS DEL PAGO
-                when (estadoPago) {
-                    "inicial" -> {
-                        // Botón para iniciar el pago
+            // Métodos de pago disponibles
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.secondaryContainer)
+            ) {
+                Column(modifier = Modifier.padding(16.dp)) {
+                    Text(
+                        text = "Selecciona el método de pago:",
+                        fontSize = 18.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        modifier = Modifier.padding(bottom = 16.dp)
+                    )
+
+                    metodosPago.forEach { metodo ->
                         Button(
                             onClick = {
                                 ventaParaPago?.let { venta ->
-                                    onProcesarPagoStripeClick?.invoke(venta)
+                                    onSeleccionarMetodoPagoClick(venta, metodo.id)
                                 }
                             },
                             modifier = Modifier
                                 .fillMaxWidth()
+                                .padding(vertical = 4.dp)
                                 .height(56.dp),
                             colors = ButtonDefaults.buttonColors(
-                                containerColor = MaterialTheme.colorScheme.primary
+                                containerColor = when (metodo.id) {
+                                    1 -> MaterialTheme.colorScheme.tertiary // Efectivo
+                                    2 -> MaterialTheme.colorScheme.primary // Tarjeta
+                                    else -> MaterialTheme.colorScheme.secondary
+                                }
                             )
                         ) {
-                            Text(
-                                text = "💳 PAGAR CON STRIPE - $${DecimalFormat("#,##0.00").format(venta.total)}",
-                                fontSize = 18.sp,
-                                fontWeight = FontWeight.Bold,
-                                color = Color.White
-                            )
-                        }
-                    }
-
-                    "procesando" -> {
-                        // Indicador de carga
-                        Card(
-                            modifier = Modifier.fillMaxWidth(),
-                            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.secondaryContainer)
-                        ) {
-                            Column(
-                                modifier = Modifier.padding(24.dp),
-                                horizontalAlignment = Alignment.CenterHorizontally
-                            ) {
-                                CircularProgressIndicator()
-                                Spacer(modifier = Modifier.height(16.dp))
-                                Text(
-                                    text = "⏳ Procesando pago...",
-                                    fontSize = 16.sp,
-                                    fontWeight = FontWeight.SemiBold
-                                )
-                                Text(
-                                    text = "Preparando el formulario de pago seguro",
-                                    fontSize = 14.sp,
-                                    color = Color.Gray
-                                )
-                            }
-                        }
-                    }
-
-                    "listo_para_pagar" -> {
-                        // El PaymentSheet se muestra automáticamente
-                        Card(
-                            modifier = Modifier.fillMaxWidth(),
-                            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primaryContainer)
-                        ) {
-                            Column(
-                                modifier = Modifier.padding(24.dp),
-                                horizontalAlignment = Alignment.CenterHorizontally
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.Center
                             ) {
                                 Text(
-                                    text = "🔒 Formulario de Pago Listo",
-                                    fontSize = 18.sp,
-                                    fontWeight = FontWeight.Bold
-                                )
-                                Text(
-                                    text = "El formulario de pago seguro debería aparecer automáticamente",
-                                    fontSize = 14.sp,
-                                    color = Color.Gray,
-                                    modifier = Modifier.padding(top = 8.dp)
-                                )
-                            }
-                        }
-                    }
-
-                    "completado" -> {
-                        // Pago exitoso
-                        Card(
-                            modifier = Modifier.fillMaxWidth(),
-                            colors = CardDefaults.cardColors(containerColor = Color(0xFF4CAF50))
-                        ) {
-                            Column(
-                                modifier = Modifier.padding(24.dp),
-                                horizontalAlignment = Alignment.CenterHorizontally
-                            ) {
-                                Text(
-                                    text = "✅ ¡Pago Completado Exitosamente!",
+                                    text = when (metodo.id) {
+                                        1 -> "💵 Pago en ${metodo.nombre.uppercase()}"
+                                        2 -> "💳 Pago con ${metodo.nombre.uppercase()}"
+                                        else -> "💰 ${metodo.nombre.uppercase()}"
+                                    },
                                     fontSize = 18.sp,
                                     fontWeight = FontWeight.Bold,
                                     color = Color.White
                                 )
-                                Text(
-                                    text = "La venta ha sido procesada correctamente",
-                                    fontSize = 14.sp,
-                                    color = Color.White,
-                                    modifier = Modifier.padding(top = 8.dp)
-                                )
                             }
-                        }
-                    }
-
-                    "error" -> {
-                        // Error en el pago
-                        Card(
-                            modifier = Modifier.fillMaxWidth(),
-                            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.errorContainer)
-                        ) {
-                            Column(modifier = Modifier.padding(16.dp)) {
-                                Text(
-                                    text = "❌ Error en el Pago",
-                                    fontSize = 18.sp,
-                                    fontWeight = FontWeight.Bold,
-                                    color = MaterialTheme.colorScheme.onErrorContainer
-                                )
-                                if (mensajeError.isNotEmpty()) {
-                                    Text(
-                                        text = mensajeError,
-                                        fontSize = 14.sp,
-                                        color = MaterialTheme.colorScheme.onErrorContainer,
-                                        modifier = Modifier.padding(top = 8.dp)
-                                    )
-                                }
-                            }
-                        }
-
-                        // Botón para reintentar
-                        Button(
-                            onClick = {
-                                estadoPago = "inicial"
-                                mensajeError = ""
-                            },
-                            modifier = Modifier.fillMaxWidth(),
-                            colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary)
-                        ) {
-                            Text("🔄 Reintentar Pago")
-                        }
-                    }
-
-                    "cancelado" -> {
-                        // Pago cancelado
-                        Card(
-                            modifier = Modifier.fillMaxWidth(),
-                            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
-                        ) {
-                            Column(modifier = Modifier.padding(16.dp)) {
-                                Text(
-                                    text = "⚠️ Pago Cancelado",
-                                    fontSize = 18.sp,
-                                    fontWeight = FontWeight.Bold
-                                )
-                                Text(
-                                    text = "El pago fue cancelado. Puedes intentar nuevamente.",
-                                    fontSize = 14.sp,
-                                    color = Color.Gray,
-                                    modifier = Modifier.padding(top = 8.dp)
-                                )
-                            }
-                        }
-
-                        // Botón para reintentar
-                        Button(
-                            onClick = {
-                                estadoPago = "inicial"
-                                mensajeError = ""
-                            },
-                            modifier = Modifier.fillMaxWidth(),
-                            colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary)
-                        ) {
-                            Text("🔄 Intentar Nuevamente")
                         }
                     }
                 }
+            }
 
-                Spacer(modifier = Modifier.height(16.dp))
+            // Información adicional
+            Card(
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.tertiaryContainer)
+            ) {
+                Column(modifier = Modifier.padding(16.dp)) {
+                    Text(
+                        text = "ℹ️ Información de métodos de pago",
+                        fontWeight = FontWeight.SemiBold
+                    )
+                    Text(
+                        text = "• Efectivo: La venta se completará inmediatamente\n• Tarjeta: Se procesará a través de Stripe de forma segura",
+                        fontSize = 14.sp,
+                        color = Color.Gray
+                    )
+                }
+            }
+        }
+    }
 
-                // Información adicional sobre Stripe
-                Card(
-                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.tertiaryContainer)
+    // 🆕 Vista de error cuando no hay PagoView configurada
+    @Composable
+    private fun VistaErrorPago() {
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(16.dp),
+            verticalArrangement = Arrangement.Center,
+            horizontalAlignment = Alignment.CenterHorizontally
+        ) {
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.errorContainer)
+            ) {
+                Column(
+                    modifier = Modifier.padding(24.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally
                 ) {
-                    Column(modifier = Modifier.padding(16.dp)) {
-                        Text(
-                            text = "🔒 Pago Seguro con Stripe",
-                            fontWeight = FontWeight.SemiBold
-                        )
-                        Text(
-                            text = "• Acepta tarjetas de crédito y débito\n• Procesamiento seguro y encriptado\n• Cumple con estándares PCI DSS\n• Soporte para múltiples métodos de pago",
-                            fontSize = 14.sp,
-                            color = Color.Gray
-                        )
+                    Text(
+                        text = "Error de Configuración",
+                        fontSize = 18.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.onErrorContainer
+                    )
+
+                    Spacer(modifier = Modifier.height(8.dp))
+
+                    Text(
+                        text = "No se pudo cargar la vista de pago. Intenta nuevamente.",
+                        fontSize = 14.sp,
+                        color = MaterialTheme.colorScheme.onErrorContainer
+                    )
+
+                    Spacer(modifier = Modifier.height(16.dp))
+
+                    Button(
+                        onClick = {
+                            vistaActual = "lista"
+                            onVolverAListaClick()
+                        }
+                    ) {
+                        Text("🏠 Volver a Lista de Ventas")
                     }
                 }
             }
@@ -640,7 +517,6 @@ class VentaView {
                         }
                     }
                 } else {
-                    // Buscador de clientes
                     Row(modifier = Modifier.fillMaxWidth()) {
                         OutlinedTextField(
                             value = busquedaCliente,
@@ -915,7 +791,7 @@ class VentaView {
                         enabled = itemsCarrito.isNotEmpty() && clienteSeleccionado != null && calcularTotal() > 0
                     ) {
                         Text(
-                            text = "✅ Confirmar Venta - ${DecimalFormat("#,##0.00").format(calcularTotal())}",
+                            text = "✅ Continuar con el Pago - ${DecimalFormat("#,##0.00").format(calcularTotal())}",
                             fontSize = 16.sp,
                             fontWeight = FontWeight.Bold
                         )
@@ -1028,6 +904,14 @@ class VentaView {
                             )
                         }
 
+                        // Mostrar método de pago
+                        Text(
+                            text = "💳 ${venta.metodoPago.uppercase()}",
+                            fontSize = 12.sp,
+                            color = MaterialTheme.colorScheme.secondary,
+                            fontWeight = FontWeight.Medium
+                        )
+
                         if (venta.notas.isNotEmpty()) {
                             Text(
                                 text = "📝 ${venta.notas}",
@@ -1040,9 +924,12 @@ class VentaView {
 
                     if (venta.estado == "pendiente") {
                         Button(
-                            onClick = { onIrAPagoClick(venta) }
+                            onClick = {
+                                // 🆕 Usar el callback para mostrar PagoView
+                                onMostrarPagoViewClick(venta)
+                            }
                         ) {
-                            Text("💳 Pagar")
+                            Text("💳 Completar Pago")
                         }
                     }
                 }

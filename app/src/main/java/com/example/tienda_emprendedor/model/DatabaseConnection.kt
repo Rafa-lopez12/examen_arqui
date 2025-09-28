@@ -11,7 +11,6 @@ class DatabaseConnection {
         //private const val URL = "jdbc:postgresql://192.168.1.100:5432/Tienda_Emprendor"
         private const val URL = "jdbc:postgresql://10.0.2.2:5432/Tienda_Emprendor"
 
-
         private const val USER = "postgres"
         private const val PASSWORD = "leyendas13"
 
@@ -64,37 +63,6 @@ class DatabaseConnection {
             } catch (e: Exception) {
                 println("Error en test de conexión: ${e.message}")
                 false
-            }
-        }
-
-        suspend fun crearTablaProductos(): Boolean {
-            val connection = obtenerConexion()
-            return try {
-                val sql = """
-                    CREATE TABLE IF NOT EXISTS producto (
-                        id SERIAL PRIMARY KEY,
-                        nombre VARCHAR(255) NOT NULL,
-                        descripcion TEXT,
-                        precio DECIMAL(10,2) NOT NULL,
-                        categoria VARCHAR(100),
-                        stock INTEGER DEFAULT 0,
-                        imagen VARCHAR(500)
-                    )
-                """.trimIndent()
-
-                val statement = connection?.createStatement()
-                statement?.executeUpdate(sql)
-                statement?.close()
-
-                println("📦 Tabla 'productos' verificada/creada exitosamente")
-                true
-
-            } catch (e: Exception) {
-                println("Error al crear tabla: ${e.message}")
-                e.printStackTrace()
-                false
-            } finally {
-                cerrarConexion(connection)
             }
         }
 
@@ -193,6 +161,32 @@ class DatabaseConnection {
             }
         }
 
+        suspend fun crearTablaMetodosPago(): Boolean {
+            val connection = obtenerConexion()
+            return try {
+                val sql = """
+                    CREATE TABLE IF NOT EXISTS metodo_pago (
+                        id SERIAL PRIMARY KEY,
+                        nombre VARCHAR(50) NOT NULL UNIQUE
+                    )
+                """.trimIndent()
+
+                val statement = connection?.createStatement()
+                statement?.executeUpdate(sql)
+                statement?.close()
+
+                println("💳 Tabla 'metodo_pago' verificada/creada exitosamente")
+                true
+
+            } catch (e: Exception) {
+                println("Error al crear tabla metodo_pago: ${e.message}")
+                e.printStackTrace()
+                false
+            } finally {
+                cerrarConexion(connection)
+            }
+        }
+
         suspend fun crearTablaVentas(): Boolean {
             val connection = obtenerConexion()
             return try {
@@ -204,7 +198,7 @@ class DatabaseConnection {
                 total DECIMAL(10,2) NOT NULL,
                 descuento DECIMAL(5,2) DEFAULT 0,
                 impuestos DECIMAL(10,2) DEFAULT 0,
-                metodo_pago VARCHAR(50),
+                pago_id INTEGER REFERENCES metodo_pago(id),
                 estado VARCHAR(20) DEFAULT 'completada',
                 notas TEXT
             )
@@ -236,7 +230,7 @@ class DatabaseConnection {
             cantidad INTEGER NOT NULL,
             precio_unitario DECIMAL(10,2) NOT NULL,
             subtotal DECIMAL(10,2) NOT NULL,
-            PRIMARY KEY (venta_id, producto_id)  -- ✅ Clave primaria compuesta
+            PRIMARY KEY (venta_id, producto_id)
         )
         """.trimIndent()
 
@@ -256,30 +250,51 @@ class DatabaseConnection {
             }
         }
 
-        suspend fun crearTablaPagos(): Boolean {
+        suspend fun insertarMetodosPagoIniciales(): Boolean {
             val connection = obtenerConexion()
             return try {
-                val sql = """
-            CREATE TABLE IF NOT EXISTS pago (
-                id SERIAL PRIMARY KEY,
-                venta_id INTEGER REFERENCES venta(id) ON DELETE CASCADE,
-                monto DECIMAL(10,2) NOT NULL,
-                metodo_pago VARCHAR(50) NOT NULL,
-                fecha_pago TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                referencia VARCHAR(100),
-                estado VARCHAR(20) DEFAULT 'completado'
-            )
-        """.trimIndent()
+                // Verificar si ya existen métodos de pago
+                val checkSql = "SELECT COUNT(*) as total FROM metodo_pago"
+                val checkStatement = connection?.prepareStatement(checkSql)
+                val resultSet = checkStatement?.executeQuery()
 
-                val statement = connection?.createStatement()
-                statement?.executeUpdate(sql)
+                var metodosExistentes = 0
+                if (resultSet?.next() == true) {
+                    metodosExistentes = resultSet.getInt("total")
+                }
+
+                resultSet?.close()
+                checkStatement?.close()
+
+                // Si ya hay métodos, no insertar datos
+                if (metodosExistentes > 0) {
+                    println("💳 Ya existen métodos de pago en la base de datos")
+                    return true
+                }
+
+                val metodosPago = listOf("efectivo", "tarjeta")
+
+                val sql = """
+                    INSERT INTO metodo_pago (nombre) 
+                    VALUES (?)
+                    ON CONFLICT (nombre) DO NOTHING
+                """.trimIndent()
+
+                val statement = connection?.prepareStatement(sql)
+
+                metodosPago.forEach { metodo ->
+                    statement?.setString(1, metodo)
+                    statement?.addBatch()
+                }
+
+                statement?.executeBatch()
                 statement?.close()
 
-                println("💳 Tabla 'pago' verificada/creada exitosamente")
+                println("💳 Métodos de pago iniciales insertados exitosamente")
                 true
 
             } catch (e: Exception) {
-                println("Error al crear tabla pago: ${e.message}")
+                println("Error al insertar métodos de pago iniciales: ${e.message}")
                 e.printStackTrace()
                 false
             } finally {
@@ -290,22 +305,26 @@ class DatabaseConnection {
         suspend fun inicializarTodasLasTablas(): Boolean {
             return try {
                 val resultadoCategorias = crearTablaCategorias()
+                val resultadoMetodosPago = crearTablaMetodosPago()
                 val resultadoProductos = crearTablaProductosActualizada()
                 val resultadoClientes = crearTablaClientes()
                 val resultadoVentas = crearTablaVentas()
                 val resultadoDetalleVenta = crearTablaDetalleVenta()
-                val resultadoPagos = crearTablaPagos()
 
                 if (resultadoCategorias) {
                     insertarCategoriasIniciales()
+                }
+
+                if (resultadoMetodosPago) {
+                    insertarMetodosPagoIniciales()
                 }
 
                 if (resultadoClientes) {
                     insertarClientesIniciales()
                 }
 
-                resultadoCategorias && resultadoProductos && resultadoClientes &&
-                        resultadoVentas && resultadoDetalleVenta && resultadoPagos
+                resultadoCategorias && resultadoMetodosPago && resultadoProductos &&
+                        resultadoClientes && resultadoVentas && resultadoDetalleVenta
             } catch (e: Exception) {
                 println("Error al inicializar tablas: ${e.message}")
                 false

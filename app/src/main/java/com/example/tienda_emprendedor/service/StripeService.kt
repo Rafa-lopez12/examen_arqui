@@ -63,14 +63,14 @@ class StripeService {
                             continuation.resume(Result.success(clientSecret))
                         } else {
                             val errorMsg = "Error HTTP ${response.code}: ${response.message}"
-                            println("❌ $errorMsg")
+                            println("$errorMsg")
                             if (responseBody != null) {
-                                println("📝 Error body: $responseBody")
+                                println("Error body: $responseBody")
                             }
                             continuation.resume(Result.failure(Exception(errorMsg)))
                         }
                     } catch (e: Exception) {
-                        println("❌ Error parseando respuesta: ${e.message}")
+                        println("Error parseando respuesta: ${e.message}")
                         continuation.resume(Result.failure(e))
                     }
                 }

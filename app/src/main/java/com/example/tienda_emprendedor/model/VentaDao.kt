@@ -19,9 +19,13 @@ class VentaDao {
 
         try {
             val query = """
-                SELECT v.*, c.nombre as cliente_nombre, c.apellido as cliente_apellido
+                SELECT v.*, 
+                       c.nombre as cliente_nombre, 
+                       c.apellido as cliente_apellido,
+                       mp.nombre as metodo_pago_nombre
                 FROM venta v
                 LEFT JOIN cliente c ON v.cliente_id = c.id
+                LEFT JOIN metodo_pago mp ON v.pago_id = mp.id
                 ORDER BY v.fecha_venta DESC
             """.trimIndent()
 
@@ -50,9 +54,13 @@ class VentaDao {
 
         try {
             val query = """
-                SELECT v.*, c.nombre as cliente_nombre, c.apellido as cliente_apellido
+                SELECT v.*, 
+                       c.nombre as cliente_nombre, 
+                       c.apellido as cliente_apellido,
+                       mp.nombre as metodo_pago_nombre
                 FROM venta v
                 LEFT JOIN cliente c ON v.cliente_id = c.id
+                LEFT JOIN metodo_pago mp ON v.pago_id = mp.id
                 WHERE v.id = ?
             """.trimIndent()
 
@@ -84,9 +92,8 @@ class VentaDao {
         try {
             connection?.autoCommit = false
 
-
             val queryVenta = """
-            INSERT INTO venta (cliente_id, total, descuento, impuestos, metodo_pago, estado, notas) 
+            INSERT INTO venta (cliente_id, total, descuento, impuestos, pago_id, estado, notas) 
             VALUES (?, ?, ?, ?, ?, ?, ?)
         """.trimIndent()
 
@@ -95,7 +102,7 @@ class VentaDao {
             statementVenta?.setDouble(2, venta.total)
             statementVenta?.setDouble(3, venta.descuento)
             statementVenta?.setDouble(4, venta.impuestos)
-            statementVenta?.setString(5, venta.metodoPago)
+            statementVenta?.setInt(5, venta.pagoId)
             statementVenta?.setString(6, venta.estado)
             statementVenta?.setString(7, venta.notas)
 
@@ -118,7 +125,6 @@ class VentaDao {
                     throw Exception("Error al insertar detalles de venta")
                 }
             }
-
 
             actualizarStockProductos(connection, detalles)
 
@@ -168,9 +174,13 @@ class VentaDao {
 
         try {
             val query = """
-                SELECT v.*, c.nombre as cliente_nombre, c.apellido as cliente_apellido
+                SELECT v.*, 
+                       c.nombre as cliente_nombre, 
+                       c.apellido as cliente_apellido,
+                       mp.nombre as metodo_pago_nombre
                 FROM venta v
                 LEFT JOIN cliente c ON v.cliente_id = c.id
+                LEFT JOIN metodo_pago mp ON v.pago_id = mp.id
                 WHERE v.cliente_id = ?
                 ORDER BY v.fecha_venta DESC
             """.trimIndent()
@@ -261,11 +271,12 @@ class VentaDao {
             total = resultSet.getDouble("total"),
             descuento = resultSet.getDouble("descuento"),
             impuestos = resultSet.getDouble("impuestos"),
-            metodoPago = resultSet.getString("metodo_pago") ?: "",
+            pagoId = resultSet.getInt("pago_id"),
             estado = resultSet.getString("estado") ?: "pendiente",
             notas = resultSet.getString("notas") ?: "",
             nombreCliente = resultSet.getString("cliente_nombre") ?: "",
-            apellidoCliente = resultSet.getString("cliente_apellido") ?: ""
+            apellidoCliente = resultSet.getString("cliente_apellido") ?: "",
+            metodoPago = resultSet.getString("metodo_pago_nombre") ?: ""
         )
     }
 

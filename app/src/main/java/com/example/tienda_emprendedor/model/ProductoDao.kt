@@ -7,32 +7,8 @@ import java.sql.ResultSet
 
 class ProductoDao {
 
+
     suspend fun obtenerTodosLosProductos(): List<Producto> = withContext(Dispatchers.IO) {
-        val productos = mutableListOf<Producto>()
-        val connection = DatabaseConnection.obtenerConexion()
-
-        try {
-            val query = "SELECT * FROM producto ORDER BY id"
-            val statement = connection?.prepareStatement(query)
-            val resultSet = statement?.executeQuery()
-
-            while (resultSet?.next() == true) {
-                productos.add(mapearProducto(resultSet))
-            }
-
-            resultSet?.close()
-            statement?.close()
-        } catch (e: Exception) {
-            println("Error al obtener productos: ${e.message}")
-            e.printStackTrace()
-        } finally {
-            DatabaseConnection.cerrarConexion(connection)
-        }
-
-        productos
-    }
-
-    suspend fun obtenerTodosLosProductosConCategoria(): List<Producto> = withContext(Dispatchers.IO) {
         val productos = mutableListOf<Producto>()
         val connection = DatabaseConnection.obtenerConexion()
 

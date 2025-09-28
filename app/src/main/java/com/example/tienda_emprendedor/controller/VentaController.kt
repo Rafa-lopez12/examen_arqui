@@ -5,6 +5,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import com.example.tienda_emprendedor.model.*
 import com.example.tienda_emprendedor.view.VentaView
+import com.example.tienda_emprendedor.view.PagoView
 import com.example.tienda_emprendedor.service.StripeService
 
 class VentaController {
@@ -14,14 +15,15 @@ class VentaController {
     private val productoDao: ProductoDao = ProductoDao()
     private val pagoDao: PagoDao = PagoDao()
     private val vista: VentaView = VentaView()
+    private val pagoView: PagoView = PagoView()
     private val stripeService: StripeService = StripeService()
     private val scope = CoroutineScope(Dispatchers.Main)
 
     init {
-        println("Inicializando VentaController...")
+
         configurarEventosVista()
+        configurarEventosPago()
         cargarDatosIniciales()
-        println("VentaController inicializado")
     }
 
     private fun configurarEventosVista() {
@@ -61,143 +63,41 @@ class VentaController {
             volverALista()
         }
 
-        vista.onProcesarPagoStripeClick = { venta ->
-            procesarPagoConStripe(venta)
+        vista.onSeleccionarMetodoPagoClick = { venta, metodoPagoId ->
+            procesarVentaConMetodoPago(venta, metodoPagoId)
         }
 
-        vista.onPaymentResultCallback = { success, paymentIntentId, error ->
-            manejarResultadoPago(success, paymentIntentId, error)
-        }
-    }
-
-    private fun procesarPagoConStripe(venta: Venta) {
-        println("INICIANDO PAGO REAL CON STRIPE =====")
-        println("Venta ID: ${venta.id}")
-        println("Cliente: ${venta.nombreCliente} ${venta.apellidoCliente}")
-        println("Monto: \$${venta.total}")
-
-        scope.launch {
-            try {
-                // Actualizar estado de la vista
-                vista.estadoPago = "procesando"
-                vista.mensajeError = ""
-
-                println("🔧 Creando PaymentIntent...")
-
-
-                val amountInCents = stripeService.dollarsToCents(venta.total)
-                val description = "Venta #${venta.id} - ${venta.nombreCliente} ${venta.apellidoCliente}"
-
-                println("💰 Monto en centavos: $amountInCents")
-
-                // Crear PaymentIntent real con Stripe
-                val result = stripeService.createPaymentIntent(
-                    amount = amountInCents,
-                    currency = "usd",
-                    description = description
-                )
-
-                result.onSuccess { clientSecret ->
-                    println("✅ PaymentIntent creado exitosamente")
-                    println("🔑 Client Secret recibido: ${clientSecret.substring(0, 20)}...")
-
-                    // Guardar el client secret en la vista
-                    vista.clientSecret = clientSecret
-                    vista.estadoPago = "listo_para_pagar"
-
-                    // Aquí es donde se debe mostrar el PaymentSheet
-                    // Esto se maneja en la vista con rememberPaymentSheet
-
-                }.onFailure { error ->
-                    println("❌ Error creando PaymentIntent: ${error.message}")
-                    vista.estadoPago = "error"
-                    vista.mensajeError = error.message ?: "Error desconocido al crear el pago"
-                }
-
-            } catch (e: Exception) {
-                println("❌ Error general procesando pago: ${e.message}")
-                e.printStackTrace()
-                vista.estadoPago = "error"
-                vista.mensajeError = e.message ?: "Error desconocido"
-            }
+        vista.onMostrarPagoViewClick = { venta ->
+            mostrarPagoView(venta)
         }
     }
 
-    // ✅ Manejar resultado del pago de Stripe
-    private fun manejarResultadoPago(success: Boolean, paymentIntentId: String?, error: String?) {
+    private fun configurarEventosPago() {
+        pagoView.onResultadoStripeCallback = { success, paymentIntentId, error ->
+            manejarResultadoStripe(success, paymentIntentId, error)
+        }
 
-        println("🎯 ===== RESULTADO DEL PAGO =====")
-        println("Éxito: $success")
-        println("PaymentIntent ID: $paymentIntentId")
-        println("Error: $error")
+        pagoView.onVolverAVentasClick = {
+            volverALista()
+        }
 
-        scope.launch {
-            try {
-                if (success && paymentIntentId != null) {
-                    // ✅ PAGO EXITOSO
-                    println("✅ Pago completado exitosamente")
+        pagoView.onPagoCompletadoClick = { venta ->
+            cargarVentas()
+        }
 
-                    vista.ventaParaPago?.let { venta ->
-                        // 1. Actualizar estado de la venta
-                        val ventaActualizada = ventaDao.actualizarEstadoVenta(venta.id, "completada")
+        pagoView.onProcesarPagoClick = { venta ->
+            procesarPago(venta)
+        }
 
-                        if (ventaActualizada) {
-                            // 2. Registrar el pago en la base de datos
-                            val pago = Pago(
-                                ventaId = venta.id,
-                                monto = venta.total,
-                                metodoPago = "stripe",
-                                referencia = paymentIntentId,
-                                estado = "completado"
-                            )
-
-                            val pagoId = pagoDao.insertarPago(pago)
-
-                            if (pagoId > 0) {
-                                println("✅ Pago registrado en BD con ID: $pagoId")
-
-                                // 3. Actualizar estado de la vista
-                                vista.estadoPago = "completado"
-                                vista.mensajeError = ""
-
-                                // 4. Volver a la lista de ventas después de un delay
-                                kotlinx.coroutines.delay(2000)
-                                vista.vistaActual = "lista"
-                                cargarVentasDesdeModelo()
-
-                                println("🎉 Proceso de pago completado exitosamente")
-
-                            } else {
-                                println("❌ Error al registrar pago en BD")
-                                vista.estadoPago = "error"
-                                vista.mensajeError = "Error al registrar el pago en la base de datos"
-                            }
-                        } else {
-                            println("❌ Error al actualizar estado de venta")
-                            vista.estadoPago = "error"
-                            vista.mensajeError = "Error al actualizar el estado de la venta"
-                        }
-                    }
-
-                } else {
-                    // ❌ PAGO FALLIDO O CANCELADO
-                    println("❌ Pago fallido o cancelado")
-                    vista.estadoPago = "error"
-                    vista.mensajeError = error ?: "El pago fue cancelado o falló"
-                }
-
-            } catch (e: Exception) {
-                println("❌ Error manejando resultado del pago: ${e.message}")
-                e.printStackTrace()
-                vista.estadoPago = "error"
-                vista.mensajeError = "Error procesando el resultado del pago: ${e.message}"
-            }
+        pagoView.onReintentarPagoClick = { venta ->
+            reintentarPago(venta)
         }
     }
 
     private fun iniciarNuevaVenta() {
         vista.limpiarCarrito()
         cargarProductosDisponibles()
+        cargarMetodosPago()
         println("🛒 Iniciando nueva venta")
     }
 
@@ -208,64 +108,201 @@ class VentaController {
     }
 
     private fun confirmarVenta(venta: Venta, detalles: List<DetalleVenta>) {
-        println("🛒 ===== INICIANDO CONFIRMACIÓN DE VENTA =====")
-        println("Cliente ID: ${venta.clienteId}")
-        println("Total: ${venta.total}")
-        println("Cantidad de productos: ${detalles.size}")
 
         if (detalles.isEmpty()) {
-            println("❌ No se puede crear venta sin productos")
             return
         }
 
         if (venta.clienteId == 0) {
-            println("❌ Debe seleccionar un cliente")
             return
         }
 
         detalles.forEach { detalle ->
-            println("  - Producto ID: ${detalle.productoId}, Cantidad: ${detalle.cantidad}, Precio: ${detalle.precioUnitario}")
         }
 
         scope.launch {
             try {
-                println("🔍 Verificando stock disponible...")
                 val stockSuficiente = verificarStockDisponible(detalles)
                 if (!stockSuficiente) {
-                    println("❌ No hay stock suficiente para algunos productos")
                     return@launch
                 }
 
-                println("✅ Stock verificado, creando venta...")
-                val ventaId = ventaDao.generarVenta(venta, detalles)
+                vista.ventaParaPago = venta
+                vista.detallesParaPago = detalles
+                vista.vistaActual = "seleccion_pago"
 
-                if (ventaId > 0) {
-                    println("✅ Venta creada exitosamente con ID: $ventaId")
 
-                    vista.limpiarCarrito()
-                    println("🧹 Carrito limpiado")
-
-                    cargarVentasDesdeModelo()
-                    println("📊 Lista de ventas actualizada")
-
-                    // Ir a la vista de pago con la venta creada
-                    val ventaCreada = ventaDao.obtenerVentaPorId(ventaId)
-                    if (ventaCreada != null) {
-                        vista.ventaParaPago = ventaCreada
-                        vista.vistaActual = "pago"
-                        vista.estadoPago = "inicial" // ✅ Reset estado del pago
-                        println("💳 Redirigiendo a vista de pago")
-                    } else {
-                        println("❌ No se pudo obtener la venta creada")
-                    }
-                } else {
-                    println("❌ Error al crear la venta - ID retornado: $ventaId")
-                }
             } catch (e: Exception) {
-                println("❌ Error al confirmar venta: ${e.message}")
                 e.printStackTrace()
             }
         }
+    }
+
+    private fun procesarVentaConMetodoPago(venta: Venta, metodoPagoId: Int) {
+
+        scope.launch {
+            try {
+                venta.pagoId = metodoPagoId
+
+                val metodoPago = pagoDao.obtenerMetodoPagoPorId(metodoPagoId)
+
+                if (metodoPagoId == 1) {
+                    procesarPagoEfectivo(venta, vista.detallesParaPago)
+
+                } else if (metodoPagoId == 2) { // Tarjeta
+                    procesarPagoTarjeta(venta, vista.detallesParaPago)
+
+                } else {
+                    println("Método de pago no válido: $metodoPagoId")
+                }
+
+            } catch (e: Exception) {
+                println("Error procesando venta con método de pago: ${e.message}")
+                e.printStackTrace()
+            }
+        }
+    }
+
+    private suspend fun procesarPagoEfectivo(venta: Venta, detalles: List<DetalleVenta>) {
+        try {
+
+            venta.estado = "completada"
+
+            val ventaId = ventaDao.generarVenta(venta, detalles)
+
+            if (ventaId > 0) {
+
+                vista.limpiarCarrito()
+                cargarVentas()
+                vista.vistaActual = "lista"
+
+
+            } else {
+                println("Error al crear la venta en efectivo")
+            }
+
+        } catch (e: Exception) {
+            println("Error procesando pago en efectivo: ${e.message}")
+            e.printStackTrace()
+        }
+    }
+
+    private suspend fun procesarPagoTarjeta(venta: Venta, detalles: List<DetalleVenta>) {
+        try {
+            venta.estado = "pendiente"
+            val ventaId = ventaDao.generarVenta(venta, detalles)
+
+            if (ventaId > 0) {
+
+                val ventaCreada = ventaDao.obtenerVentaPorId(ventaId)
+                if (ventaCreada != null) {
+                    configurarVentaParaPago(ventaCreada)
+                    vista.ventaParaPago = ventaCreada
+                    vista.pagoView = pagoView // Pasar PagoView a VentaView
+                    vista.vistaActual = "pago_stripe"
+                } else {
+                    println("No se pudo obtener la venta creada")
+                }
+
+            } else {
+                println("Error al crear la venta para tarjeta")
+            }
+
+        } catch (e: Exception) {
+
+            e.printStackTrace()
+        }
+    }
+
+    private fun configurarVentaParaPago(venta: Venta) {
+        pagoView.ventaParaPago = venta
+        pagoView.estadoPago = "inicial"
+        pagoView.mensajeError = ""
+        pagoView.clientSecret = ""
+    }
+
+
+    private fun procesarPago(venta: Venta) {
+
+        scope.launch {
+            try {
+                pagoView.estadoPago = "procesando"
+                pagoView.mensajeError = ""
+
+                val amountInCents = stripeService.dollarsToCents(venta.total)
+                val description = "Venta #${venta.id} - ${venta.nombreCliente} ${venta.apellidoCliente}"
+                val result = stripeService.createPaymentIntent(
+                    amount = amountInCents,
+                    currency = "usd",
+                    description = description
+                )
+
+                result.onSuccess { clientSecret ->
+                    pagoView.clientSecret = clientSecret
+                    pagoView.estadoPago = "listo_para_pagar"
+
+                }.onFailure { error ->
+                    pagoView.estadoPago = "error"
+                    pagoView.mensajeError = error.message ?: "Error desconocido al crear el pago"
+                }
+
+            } catch (e: Exception) {
+                e.printStackTrace()
+                pagoView.estadoPago = "error"
+                pagoView.mensajeError = e.message ?: "Error desconocido"
+            }
+        }
+    }
+
+    private fun manejarResultadoStripe(success: Boolean, paymentIntentId: String?, error: String?) {
+
+        scope.launch {
+            try {
+                if (success && paymentIntentId != null) {
+
+
+                    pagoView.ventaParaPago?.let { venta ->
+                        val ventaActualizada = ventaDao.actualizarEstadoVenta(venta.id, "completada")
+                        if (ventaActualizada) {
+
+                            pagoView.estadoPago = "completado"
+                            pagoView.mensajeError = ""
+                            pagoView.paymentIntentId = paymentIntentId
+
+
+                            kotlinx.coroutines.delay(3000) // 3 segundos para ver el éxito
+                            volverALista()
+
+                        } else {
+                            pagoView.estadoPago = "error"
+                            pagoView.mensajeError = "Error al actualizar el estado de la venta"
+                        }
+                    }
+
+                } else {
+                    pagoView.estadoPago = "error"
+                    pagoView.mensajeError = error ?: "El pago fue cancelado o falló"
+                }
+
+            } catch (e: Exception) {
+                e.printStackTrace()
+                pagoView.estadoPago = "error"
+                pagoView.mensajeError = "Error procesando el resultado del pago: ${e.message}"
+            }
+        }
+    }
+
+    private fun reintentarPago(venta: Venta) {
+        pagoView.estadoPago = "inicial"
+        pagoView.mensajeError = ""
+        pagoView.clientSecret = ""
+    }
+
+
+    private fun mostrarPagoView(venta: Venta) {
+        configurarVentaParaPago(venta)
+        vista.pagoView = pagoView // Pasar la vista de pago a VentaView
+        vista.vistaActual = "pago_stripe"
     }
 
     private fun buscarClientes(busqueda: String) {
@@ -276,14 +313,13 @@ class VentaController {
                 clienteDao.obtenerTodosLosClientes().take(10)
             }
             vista.actualizarClientesDisponibles(clientes)
-            println("🔍 Búsqueda clientes '$busqueda': ${clientes.size} resultados")
         }
     }
 
     private fun buscarProductos(busqueda: String) {
         scope.launch {
             val productos = if (busqueda.trim().length >= 2) {
-                val todosLosProductos = productoDao.obtenerTodosLosProductosConCategoria()
+                val todosLosProductos = productoDao.obtenerTodosLosProductos()
                 todosLosProductos.filter { producto ->
                     producto.nombre.contains(busqueda, ignoreCase = true) ||
                             producto.descripcion.contains(busqueda, ignoreCase = true) ||
@@ -291,41 +327,44 @@ class VentaController {
                             producto.subcategoria.contains(busqueda, ignoreCase = true)
                 }.filter { it.stock > 0 }
             } else {
-                productoDao.obtenerTodosLosProductosConCategoria().filter { it.stock > 0 }
+                productoDao.obtenerTodosLosProductos().filter { it.stock > 0 }
             }
             vista.actualizarProductosDisponibles(productos.take(10))
-            println("🔍 Búsqueda productos '$busqueda': ${productos.size} resultados")
         }
     }
 
     private fun irAPago(venta: Venta) {
-        vista.ventaParaPago = venta
-        vista.vistaActual = "pago"
-        vista.estadoPago = "inicial" // ✅ Reset estado
-        println("💳 Procesando pago para venta #${venta.id}")
+        mostrarPagoView(venta)
     }
 
     private fun volverALista() {
         vista.vistaActual = "lista"
-        cargarVentasDesdeModelo()
+        limpiarDatosPago()
+        cargarVentas()
+    }
+
+    private fun limpiarDatosPago() {
+        pagoView.ventaParaPago = null
+        pagoView.estadoPago = "inicial"
+        pagoView.mensajeError = ""
+        pagoView.clientSecret = ""
+        pagoView.paymentIntentId = ""
     }
 
     private fun cargarDatosIniciales() {
-        cargarVentasDesdeModelo()
+        cargarVentas()
+        cargarMetodosPago()
     }
 
-    private fun cargarVentasDesdeModelo() {
-        println("📊 Iniciando carga de ventas...")
+    private fun cargarVentas() {
         scope.launch {
             try {
                 val ventas = ventaDao.obtenerTodasLasVentas()
                 vista.actualizarVentas(ventas)
-                println("🛒 Ventas cargadas exitosamente: ${ventas.size}")
                 ventas.forEach { venta ->
-                    println("  - Venta #${venta.id}: ${venta.nombreCliente} ${venta.apellidoCliente} - ${venta.total}")
+                    println("  - Venta #${venta.id}: ${venta.nombreCliente} ${venta.apellidoCliente} - ${venta.total} - ${venta.metodoPago}")
                 }
             } catch (e: Exception) {
-                println("❌ Error al cargar ventas: ${e.message}")
                 e.printStackTrace()
             }
         }
@@ -333,84 +372,49 @@ class VentaController {
 
     private fun cargarProductosDisponibles() {
         scope.launch {
-            val productos = productoDao.obtenerTodosLosProductosConCategoria()
+            val productos = productoDao.obtenerTodosLosProductos()
                 .filter { it.stock > 0 }
             vista.actualizarProductosDisponibles(productos)
-            println("📦 Productos con stock cargados: ${productos.size}")
+        }
+    }
+
+    private fun cargarMetodosPago() {
+        scope.launch {
+            try {
+                val metodosPago = pagoDao.obtenerMetodosPago()
+                vista.actualizarMetodosPago(metodosPago)
+                metodosPago.forEach { metodo ->
+                    println("  - ${metodo.id}: ${metodo.nombre}")
+                }
+            } catch (e: Exception) {
+                e.printStackTrace()
+            }
         }
     }
 
     private suspend fun verificarStockDisponible(detalles: List<DetalleVenta>): Boolean {
         return try {
-            println("🔍 Verificando stock para ${detalles.size} productos...")
             detalles.all { detalle ->
-                println("  - Verificando producto ID: ${detalle.productoId}, cantidad solicitada: ${detalle.cantidad}")
+
                 val producto = productoDao.obtenerProductoPorId(detalle.productoId)
                 if (producto != null) {
-                    println("    ✅ Producto encontrado: ${producto.nombre}, stock actual: ${producto.stock}")
+
                     val stockSuficiente = producto.stock >= detalle.cantidad
                     if (!stockSuficiente) {
-                        println("    ❌ Stock insuficiente: necesita ${detalle.cantidad}, disponible ${producto.stock}")
+                        println("Stock insuficiente: necesita ${detalle.cantidad}, disponible ${producto.stock}")
                     }
                     stockSuficiente
                 } else {
-                    println("    ❌ Producto no encontrado con ID: ${detalle.productoId}")
+                    println("Producto no encontrado con ID: ${detalle.productoId}")
                     false
                 }
             }
         } catch (e: Exception) {
-            println("❌ Error al verificar stock: ${e.message}")
             e.printStackTrace()
             false
         }
     }
 
-    // Método para actualizar estado de venta (útil para pagos)
-    fun actualizarEstadoVenta(ventaId: Int, nuevoEstado: String, callback: (Boolean) -> Unit) {
-        scope.launch {
-            val exito = ventaDao.actualizarEstadoVenta(ventaId, nuevoEstado)
-            callback(exito)
-            if (exito) {
-                cargarVentasDesdeModelo()
-                println("✅ Estado de venta #$ventaId actualizado a: $nuevoEstado")
-            } else {
-                println("❌ Error al actualizar estado de venta #$ventaId")
-            }
-        }
-    }
-
-    // Método para obtener ventas por cliente
-    fun obtenerVentasCliente(clienteId: Int, callback: (List<Venta>) -> Unit) {
-        scope.launch {
-            val ventas = ventaDao.obtenerVentasPorCliente(clienteId)
-            callback(ventas)
-        }
-    }
-
-    // Método para obtener detalle completo de una venta
-    fun obtenerDetalleVenta(ventaId: Int, callback: (Venta?) -> Unit) {
-        scope.launch {
-            val venta = ventaDao.obtenerVentaPorId(ventaId)
-            callback(venta)
-        }
-    }
-
-    // Estadísticas básicas
-    fun obtenerEstadisticasVentas(callback: (Map<String, Any>) -> Unit) {
-        scope.launch {
-            val todasLasVentas = ventaDao.obtenerTodasLasVentas()
-            val stats = mapOf(
-                "totalVentas" to todasLasVentas.size,
-                "ventasCompletadas" to todasLasVentas.count { it.estado == "completada" },
-                "ventasPendientes" to todasLasVentas.count { it.estado == "pendiente" },
-                "montoTotalVentas" to todasLasVentas.filter { it.estado == "completada" }.sumOf { it.total },
-                "promedioVenta" to if (todasLasVentas.isNotEmpty()) {
-                    todasLasVentas.filter { it.estado == "completada" }.sumOf { it.total } / todasLasVentas.count { it.estado == "completada" }.coerceAtLeast(1)
-                } else 0.0
-            )
-            callback(stats)
-        }
-    }
 
     fun obtenerVista(): VentaView {
         return vista
@@ -421,7 +425,8 @@ class VentaController {
     }
 
     fun recargarDatos() {
-        cargarVentasDesdeModelo()
+        cargarVentas()
         cargarProductosDisponibles()
+        cargarMetodosPago()
     }
 }

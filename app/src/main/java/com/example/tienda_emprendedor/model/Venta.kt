@@ -7,12 +7,13 @@ data class Venta(
     var total: Double = 0.0,
     var descuento: Double = 0.0,
     var impuestos: Double = 0.0,
-    var metodoPago: String = "",
+    var pagoId: Int = 0,
     var estado: String = "pendiente",
     var notas: String = "",
 
 
     var nombreCliente: String = "",
     var apellidoCliente: String = "",
+    var metodoPago: String = "",
     var detalles: List<DetalleVenta> = listOf()
 )
