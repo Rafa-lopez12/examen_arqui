@@ -1,4 +1,3 @@
-// app/src/main/java/com/example/tienda_emprendedor/view/CategoriaView.kt
 package com.example.tienda_emprendedor.view
 
 import androidx.compose.foundation.layout.*
@@ -13,6 +12,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.tienda_emprendedor.model.Categoria
+import com.example.tienda_emprendedor.utils.SubcategoriaUtils
 
 class CategoriaView {
 
@@ -113,15 +113,28 @@ class CategoriaView {
             Spacer(modifier = Modifier.height(16.dp))
 
             Text(
-                text = "Lista de Categorías Disponibles",
+                text = "Lista de Categorías Registradas",
                 fontSize = 20.sp,
                 fontWeight = FontWeight.SemiBold,
                 modifier = Modifier.padding(bottom = 8.dp)
             )
 
-            LazyColumn {
-                items(categorias) { categoria ->
-                    CategoriaCard(categoria = categoria)
+            if (categorias.isEmpty()) {
+                Card(
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
+                ) {
+                    Text(
+                        text = "No hay categorías registradas en la base de datos",
+                        modifier = Modifier.padding(16.dp),
+                        color = Color.Gray
+                    )
+                }
+            } else {
+                LazyColumn {
+                    items(categorias) { categoria ->
+                        CategoriaCard(categoria = categoria)
+                    }
                 }
             }
         }
@@ -142,43 +155,70 @@ class CategoriaView {
                     modifier = Modifier.padding(bottom = 8.dp)
                 )
 
-                // Dropdown para Categoría Principal
-                ExposedDropdownMenuBox(
-                    expanded = mostrarDropdownCategoria,
-                    onExpandedChange = { mostrarDropdownCategoria = !mostrarDropdownCategoria }
-                ) {
-                    OutlinedTextField(
-                        value = categoriaSeleccionada,
-                        onValueChange = { },
-                        readOnly = true,
-                        label = { Text("Categoría Principal") },
-                        trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = mostrarDropdownCategoria) },
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .menuAnchor()
-                    )
+                Text(
+                    text = "ℹ️ Escribe libremente o selecciona de las predefinidas",
+                    fontSize = 12.sp,
+                    color = Color.Gray,
+                    modifier = Modifier.padding(bottom = 8.dp)
+                )
 
-                    ExposedDropdownMenu(
-                        expanded = mostrarDropdownCategoria,
-                        onDismissRequest = { mostrarDropdownCategoria = false }
+                // 🔥 CAMPO DE TEXTO LIBRE para Categoría Principal
+                OutlinedTextField(
+                    value = nombre,
+                    onValueChange = {
+                        nombre = it
+                        categoriaSeleccionada = it
+                        onNombreChanged(it)
+
+                        // Si la categoría existe en el sistema, cargar sus subcategorías
+                        if (SubcategoriaUtils.categoriasPrincipales.contains(it)) {
+                            subcategoriasDisponibles = SubcategoriaUtils.obtenerSubcategorias(it)
+                        } else {
+                            subcategoriasDisponibles = emptyList()
+                        }
+                    },
+                    label = { Text("* Categoría Principal") },
+                    placeholder = { Text("Ej: Split, Ventana, Mini Split, etc.") },
+                    modifier = Modifier.fillMaxWidth(),
+                    singleLine = true,
+                    supportingText = {
+                        if (nombre.isNotEmpty() && SubcategoriaUtils.categoriasPrincipales.contains(nombre)) {
+                            Text(
+                                text = "✅ Categoría predefinida detectada",
+                                color = Color(0xFF4CAF50),
+                                fontSize = 11.sp
+                            )
+                        } else if (nombre.isNotEmpty()) {
+                            Text(
+                                text = "✨ Nueva categoría personalizada",
+                                color = MaterialTheme.colorScheme.primary,
+                                fontSize = 11.sp
+                            )
+                        }
+                    }
+                )
+
+                if (nombre.isEmpty()) {
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Text(
+                        text = "Sugerencias:",
+                        fontSize = 12.sp,
+                        fontWeight = FontWeight.SemiBold
+                    )
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(4.dp)
                     ) {
-                        // USAR DATOS REALES DE LA BD - no SubcategoriaUtils
-                        val categoriasUnicas = categorias.map { it.nombre }.distinct()
-                        categoriasUnicas.forEach { categoria ->
-                            DropdownMenuItem(
-                                text = { Text(categoria) },
+                        SubcategoriaUtils.categoriasPrincipales.take(4).forEach { cat ->
+                            FilterChip(
+                                selected = false,
                                 onClick = {
-                                    categoriaSeleccionada = categoria
-                                    nombre = categoria
-                                    onNombreChanged(categoria)
-                                    // Obtener subcategorías reales de esa categoría desde BD
-                                    subcategoriasDisponibles = categorias
-                                        .filter { it.nombre == categoria }
-                                        .map { it.subcategoria }
-                                        .distinct()
-                                    subcategoria = ""
-                                    mostrarDropdownCategoria = false
-                                }
+                                    nombre = cat
+                                    categoriaSeleccionada = cat
+                                    onNombreChanged(cat)
+                                    subcategoriasDisponibles = SubcategoriaUtils.obtenerSubcategorias(cat)
+                                },
+                                label = { Text(cat, fontSize = 11.sp) }
                             )
                         }
                     }
@@ -186,43 +226,47 @@ class CategoriaView {
 
                 Spacer(modifier = Modifier.height(8.dp))
 
-                // Dropdown para Subcategoría
-                if (subcategoriasDisponibles.isNotEmpty()) {
-                    ExposedDropdownMenuBox(
-                        expanded = mostrarDropdownSubcategoria,
-                        onExpandedChange = { mostrarDropdownSubcategoria = !mostrarDropdownSubcategoria }
-                    ) {
-                        OutlinedTextField(
-                            value = subcategoria,
-                            onValueChange = { },
-                            readOnly = true,
-                            label = { Text("Subcategoría") },
-                            trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = mostrarDropdownSubcategoria) },
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .menuAnchor()
-                        )
+                OutlinedTextField(
+                    value = subcategoria,
+                    onValueChange = {
+                        subcategoria = it
+                        onSubcategoriaChanged(it)
+                    },
+                    label = { Text("* Subcategoría") },
+                    placeholder = { Text("Ej: Residencial, Comercial, 12000 BTU, etc.") },
+                    modifier = Modifier.fillMaxWidth(),
+                    singleLine = true,
+                    enabled = nombre.isNotEmpty()
+                )
 
-                        ExposedDropdownMenu(
-                            expanded = mostrarDropdownSubcategoria,
-                            onDismissRequest = { mostrarDropdownSubcategoria = false }
-                        ) {
-                            subcategoriasDisponibles.forEach { sub ->
-                                DropdownMenuItem(
-                                    text = { Text(sub) },
-                                    onClick = {
-                                        subcategoria = sub
-                                        onSubcategoriaChanged(sub)
-                                        mostrarDropdownSubcategoria = false
-                                    }
-                                )
-                            }
+                // Botones de sugerencias de subcategorías (si hay predefinidas)
+                if (subcategoriasDisponibles.isNotEmpty() && subcategoria.isEmpty()) {
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Text(
+                        text = "Sugerencias para $nombre:",
+                        fontSize = 12.sp,
+                        fontWeight = FontWeight.SemiBold
+                    )
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(4.dp)
+                    ) {
+                        subcategoriasDisponibles.forEach { sub ->
+                            FilterChip(
+                                selected = false,
+                                onClick = {
+                                    subcategoria = sub
+                                    onSubcategoriaChanged(sub)
+                                },
+                                label = { Text(sub, fontSize = 11.sp) }
+                            )
                         }
                     }
-
-                    Spacer(modifier = Modifier.height(8.dp))
                 }
 
+                Spacer(modifier = Modifier.height(8.dp))
+
+                // Campo de descripción (opcional)
                 OutlinedTextField(
                     value = descripcion,
                     onValueChange = {
@@ -230,17 +274,98 @@ class CategoriaView {
                         onDescripcionChanged(it)
                     },
                     label = { Text("Descripción (Opcional)") },
-                    modifier = Modifier.fillMaxWidth()
+                    placeholder = { Text("Ej: Aires acondicionados ${nombre} ${subcategoria}") },
+                    modifier = Modifier.fillMaxWidth(),
+                    maxLines = 2
                 )
 
                 Spacer(modifier = Modifier.height(16.dp))
 
-                Button(
-                    onClick = onAgregarClick,
-                    modifier = Modifier.align(Alignment.CenterHorizontally),
-                    enabled = nombre.isNotEmpty() && subcategoria.isNotEmpty()
+                // Información de ayuda
+                Card(
+                    colors = CardDefaults.cardColors(
+                        containerColor = MaterialTheme.colorScheme.tertiaryContainer
+                    )
                 ) {
-                    Text("🏷️ Crear Categoría")
+                    Column(modifier = Modifier.padding(12.dp)) {
+                        Text(
+                            text = "💡 Ayuda:",
+                            fontWeight = FontWeight.SemiBold,
+                            fontSize = 12.sp
+                        )
+                        Text(
+                            text = "• Puedes escribir cualquier categoría y subcategoría\n" +
+                                    "• Usa los botones de sugerencias para las predefinidas\n" +
+                                    "• Ejemplos: Mini Split - 18000 BTU, Cassette - 4 Vías, etc.",
+                            fontSize = 11.sp,
+                            color = Color.Gray
+                        )
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(16.dp))
+
+                // Vista previa de lo que se creará
+                if (nombre.isNotEmpty() && subcategoria.isNotEmpty()) {
+                    Card(
+                        colors = CardDefaults.cardColors(
+                            containerColor = MaterialTheme.colorScheme.primaryContainer
+                        )
+                    ) {
+                        Column(modifier = Modifier.padding(12.dp)) {
+                            Text(
+                                text = "📋 Vista previa:",
+                                fontWeight = FontWeight.SemiBold,
+                                fontSize = 12.sp
+                            )
+                            Text(
+                                text = "$nombre - $subcategoria",
+                                fontSize = 16.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = MaterialTheme.colorScheme.primary
+                            )
+                            if (descripcion.isNotEmpty()) {
+                                Text(
+                                    text = descripcion,
+                                    fontSize = 11.sp,
+                                    color = Color.Gray
+                                )
+                            }
+                        }
+                    }
+                    Spacer(modifier = Modifier.height(8.dp))
+                }
+
+                // Botón para crear
+                Button(
+                    onClick = {
+                        println("🔘 Botón Crear clickeado")
+                        println("   Nombre: $nombre")
+                        println("   Subcategoría: $subcategoria")
+                        println("   Descripción: $descripcion")
+                        onAgregarClick()
+                    },
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(48.dp),
+                    enabled = nombre.trim().isNotEmpty() && subcategoria.trim().isNotEmpty()
+                ) {
+                    Text(
+                        text = "🏷️ Crear Categoría",
+                        fontSize = 16.sp,
+                        fontWeight = FontWeight.Bold
+                    )
+                }
+
+                if (nombre.trim().isEmpty() || subcategoria.trim().isEmpty()) {
+                    Text(
+                        text = "* Ambos campos son obligatorios",
+                        fontSize = 12.sp,
+                        color = MaterialTheme.colorScheme.error,
+                        modifier = Modifier
+                            .align(Alignment.CenterHorizontally)
+                            .padding(top = 8.dp)
+                    )
                 }
             }
         }

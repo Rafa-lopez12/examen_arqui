@@ -22,7 +22,7 @@ class VentaView {
     var productosDisponibles by mutableStateOf(listOf<Producto>())
     var clientesDisponibles by mutableStateOf(listOf<Cliente>())
     var metodosPago by mutableStateOf(listOf<Pago>())
-    var itemsCarrito by mutableStateOf(mutableMapOf<Int, DetalleVenta>())
+    var itemsCarrito by mutableStateOf<Map<Int, DetalleVenta>>(emptyMap())
     var descuento by mutableStateOf("")
     var notas by mutableStateOf("")
 
@@ -76,6 +76,8 @@ class VentaView {
     }
 
     fun agregarAlCarrito(producto: Producto, cantidad: Int) {
+        val carritoMutable = itemsCarrito.toMutableMap()
+
         val detalle = DetalleVenta(
             productoId = producto.id,
             cantidad = cantidad,
@@ -88,25 +90,29 @@ class VentaView {
             subcategoria = producto.subcategoria
         )
 
-        // Si ya existe el producto, sumar la cantidad
-        if (itemsCarrito.containsKey(producto.id)) {
-            val existente = itemsCarrito[producto.id]!!
+        if (carritoMutable.containsKey(producto.id)) {
+            val existente = carritoMutable[producto.id]!!
             val nuevaCantidad = existente.cantidad + cantidad
             if (nuevaCantidad <= producto.stock) {
-                existente.cantidad = nuevaCantidad
-                existente.subtotal = existente.precioUnitario * nuevaCantidad
+                val actualizado = existente.copy(
+                    cantidad = nuevaCantidad,
+                    subtotal = existente.precioUnitario * nuevaCantidad
+                )
+                carritoMutable[producto.id] = actualizado
             }
         } else {
-            itemsCarrito[producto.id] = detalle
+            carritoMutable[producto.id] = detalle
         }
+        itemsCarrito = carritoMutable.toMap()
 
-        // Refrescar el estado
-        itemsCarrito = itemsCarrito.toMutableMap()
+        println("🛒 Producto agregado al carrito. Total items: ${itemsCarrito.size}")
     }
 
     fun eliminarDelCarrito(productoId: Int) {
-        itemsCarrito.remove(productoId)
-        itemsCarrito = itemsCarrito.toMutableMap()
+        val carritoMutable = itemsCarrito.toMutableMap()
+        carritoMutable.remove(productoId)
+        itemsCarrito = carritoMutable.toMap()
+        println("🗑️ Producto eliminado del carrito. Total items: ${itemsCarrito.size}")
     }
 
     fun calcularSubtotal(): Double {
@@ -122,7 +128,7 @@ class VentaView {
     }
 
     fun limpiarCarrito() {
-        itemsCarrito.clear()
+        itemsCarrito = emptyMap()
         clienteSeleccionado = null
         descuento = ""
         notas = ""
@@ -131,7 +137,7 @@ class VentaView {
         busquedaProducto = ""
         ventaParaPago = null
         detallesParaPago = emptyList()
-        pagoView = null // 🆕 Limpiar referencia a PagoView
+        pagoView = null
     }
 
     fun obtenerVentaActual(): Venta {
@@ -273,7 +279,6 @@ class VentaView {
                 }
             }
 
-            // Selección de cliente
             item {
                 SelectorCliente()
             }
@@ -666,6 +671,8 @@ class VentaView {
 
     @Composable
     private fun CarritoDeCompra() {
+        val cantidadItems = itemsCarrito.size
+
         Card(
             modifier = Modifier.fillMaxWidth(),
             colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.tertiaryContainer)
@@ -677,19 +684,22 @@ class VentaView {
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Text(
-                        text = "🛒 Carrito de Compra (${itemsCarrito.size})",
+                        text = "🛒 Carrito de Compra ($cantidadItems)",
                         fontSize = 18.sp,
                         fontWeight = FontWeight.SemiBold
                     )
 
-                    if (itemsCarrito.isNotEmpty()) {
-                        TextButton(onClick = { itemsCarrito.clear() }) {
+                    if (cantidadItems > 0) {
+                        TextButton(onClick = {
+                            itemsCarrito = emptyMap()
+                            println("🗑️ Carrito limpiado")
+                        }) {
                             Text("🗑️ Limpiar", color = Color.Red)
                         }
                     }
                 }
 
-                if (itemsCarrito.isEmpty()) {
+                if (cantidadItems == 0) {
                     Text(
                         text = "El carrito está vacío",
                         color = Color.Gray,
@@ -698,7 +708,6 @@ class VentaView {
                 } else {
                     Spacer(modifier = Modifier.height(8.dp))
 
-                    // Items del carrito
                     LazyColumn(
                         modifier = Modifier.heightIn(max = 300.dp),
                         verticalArrangement = Arrangement.spacedBy(4.dp)
@@ -710,7 +719,6 @@ class VentaView {
 
                     Spacer(modifier = Modifier.height(16.dp))
 
-                    // Campo de descuento
                     OutlinedTextField(
                         value = descuento,
                         onValueChange = { descuento = it },
@@ -721,7 +729,6 @@ class VentaView {
 
                     Spacer(modifier = Modifier.height(8.dp))
 
-                    // Campo de notas
                     OutlinedTextField(
                         value = notas,
                         onValueChange = { notas = it },
@@ -732,7 +739,6 @@ class VentaView {
 
                     Spacer(modifier = Modifier.height(16.dp))
 
-                    // Resumen de totales
                     Card(
                         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primaryContainer)
                     ) {
@@ -742,7 +748,7 @@ class VentaView {
                                 horizontalArrangement = Arrangement.SpaceBetween
                             ) {
                                 Text("Subtotal:")
-                                Text("${DecimalFormat("#,##0.00").format(calcularSubtotal())}")
+                                Text("$${DecimalFormat("#,##0.00").format(calcularSubtotal())}")
                             }
 
                             if (calcularDescuentoMonto() > 0) {
@@ -751,7 +757,7 @@ class VentaView {
                                     horizontalArrangement = Arrangement.SpaceBetween
                                 ) {
                                     Text("Descuento:")
-                                    Text("-${DecimalFormat("#,##0.00").format(calcularDescuentoMonto())}", color = Color.Red)
+                                    Text("-$${DecimalFormat("#,##0.00").format(calcularDescuentoMonto())}", color = Color.Red)
                                 }
                             }
 
@@ -767,7 +773,7 @@ class VentaView {
                                     fontSize = 18.sp
                                 )
                                 Text(
-                                    text = "${DecimalFormat("#,##0.00").format(calcularTotal())}",
+                                    text = "$${DecimalFormat("#,##0.00").format(calcularTotal())}",
                                     fontWeight = FontWeight.Bold,
                                     fontSize = 18.sp,
                                     color = MaterialTheme.colorScheme.primary
@@ -778,7 +784,6 @@ class VentaView {
 
                     Spacer(modifier = Modifier.height(16.dp))
 
-                    // Botón confirmar venta
                     Button(
                         onClick = {
                             val venta = obtenerVentaActual()
@@ -788,10 +793,10 @@ class VentaView {
                         modifier = Modifier
                             .fillMaxWidth()
                             .height(50.dp),
-                        enabled = itemsCarrito.isNotEmpty() && clienteSeleccionado != null && calcularTotal() > 0
+                        enabled = cantidadItems > 0 && clienteSeleccionado != null && calcularTotal() > 0
                     ) {
                         Text(
-                            text = "✅ Continuar con el Pago - ${DecimalFormat("#,##0.00").format(calcularTotal())}",
+                            text = "✅ Continuar con el Pago - $${DecimalFormat("#,##0.00").format(calcularTotal())}",
                             fontSize = 16.sp,
                             fontWeight = FontWeight.Bold
                         )

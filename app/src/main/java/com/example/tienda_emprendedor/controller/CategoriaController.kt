@@ -42,32 +42,51 @@ class CategoriaController {
     }
 
     private fun agregarCategoria() {
-        if (vista.nombre.isNotEmpty() && vista.subcategoria.isNotEmpty()) {
-            if (SubcategoriaUtils.esSubcategoriaValida(vista.nombre, vista.subcategoria)) {
-                val categoria = Categoria(
-                    nombre = vista.nombre,
-                    subcategoria = vista.subcategoria,
-                    descripcion = vista.descripcion.ifEmpty {
-                        "Aires acondicionados ${vista.nombre} ${vista.subcategoria}"
-                    }
-                )
+        if (vista.nombre.trim().isEmpty() || vista.subcategoria.trim().isEmpty()) {
+            return
+        }
 
-                scope.launch {
-                    val exito = modelo.insertarCategoria(categoria)
-                    if (exito) {
-                        vista.limpiarFormulario()
-                        vista.mostrarFormulario = false
-                        cargarCategoriasDesdeModelo()
-                        println(" Categoría creada: ${categoria.nombre} - ${categoria.subcategoria}")
-                    } else {
-                        println("Error al crear categoría (posiblemente duplicada)")
-                    }
-                }
-            } else {
-                println("❌ Combinación de categoría/subcategoría no válida")
-            }
+        val nombreLimpio = vista.nombre.trim()
+        val subcategoriaLimpia = vista.subcategoria.trim()
+
+        if (nombreLimpio.length < 2) {
+            return
+        }
+
+        if (subcategoriaLimpia.length < 2) {
+            return
+        }
+        val esPredefinida = SubcategoriaUtils.esSubcategoriaValida(nombreLimpio, subcategoriaLimpia)
+
+        if (esPredefinida) {
+            println("Creando categoría predefinida: $nombreLimpio - $subcategoriaLimpia")
         } else {
-            println("❌ Faltan campos obligatorios")
+            println("Creando categoría personalizada: $nombreLimpio - $subcategoriaLimpia")
+        }
+
+        val categoria = Categoria(
+            nombre = nombreLimpio,
+            subcategoria = subcategoriaLimpia,
+            descripcion = vista.descripcion.trim().ifEmpty {
+                "Aires acondicionados $nombreLimpio $subcategoriaLimpia"
+            }
+        )
+
+        scope.launch {
+            try {
+                val exito = modelo.insertarCategoria(categoria)
+                if (exito) {
+                    vista.limpiarFormulario()
+                    vista.mostrarFormulario = false
+                    cargarCategoriasDesdeModelo()
+                } else {
+                    println("⚠No se pudo crear la categoría (posiblemente ya existe)")
+                    println("   Verifica que la combinación $nombreLimpio - $subcategoriaLimpia no esté duplicada")
+                }
+            } catch (e: Exception) {
+                println(" Error al crear categoría: ${e.message}")
+                e.printStackTrace()
+            }
         }
     }
 
